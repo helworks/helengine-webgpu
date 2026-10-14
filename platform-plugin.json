@@ -1,0 +1,6 @@
+{
+  "platformId": "webgpu",
+  "displayName": "WebGPU",
+  "builderAssemblyPath": "builder/helengine.webgpu.builder.dll",
+  "definitionFactoryType": "helengine.webgpu.builder.WebGpuPlatformDefinitionFactory"
+}

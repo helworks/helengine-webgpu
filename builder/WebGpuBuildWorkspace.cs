@@ -1,0 +1,99 @@
+using helengine.baseplatform.Builders;
+using helengine.baseplatform.Reporting;
+using helengine.baseplatform.Requests;
+using System.Text.Json;
+
+namespace helengine.webgpu.builder;
+
+/// <summary>Stages resolved game content and verifies native artifacts before publication.</summary>
+public sealed class WebGpuBuildWorkspace {
+    /// <summary>Stores the compiler boundary used for this build.</summary>
+    readonly IWebGpuNativeBuildExecutor Executor;
+    /// <summary>Stores the resolved package root supplied by editor orchestration.</summary>
+    readonly string StagingRoot;
+    /// <summary>Stores the maintained platform source root.</summary>
+    readonly string RepositoryRoot;
+    /// <summary>Initializes the compiler and explicit package/source roots.</summary>
+    public WebGpuBuildWorkspace(IWebGpuNativeBuildExecutor executor, string stagingRoot, string repositoryRoot) {
+        Executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        StagingRoot = Path.GetFullPath(stagingRoot);
+        RepositoryRoot = Path.GetFullPath(repositoryRoot);
+    }
+    /// <summary>Executes the requested staging/compilation scope with structured progress and diagnostics.</summary>
+    public Task<PlatformBuildReport> BuildAsync(PlatformBuildRequest request, IPlatformBuildProgressReporter progress, IPlatformBuildDiagnosticReporter diagnostics, CancellationToken cancellationToken) {
+        ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(progress); ArgumentNullException.ThrowIfNull(diagnostics);
+        cancellationToken.ThrowIfCancellationRequested();
+        try {
+            if (request.Manifest.Scenes.Count(scene => scene.SceneId == request.Manifest.StartupSceneId) != 1) {
+                throw new InvalidOperationException("Startup scene must identify exactly one packaged scene.");
+            }
+            foreach (var scene in request.Manifest.Scenes) { ValidatePayload(scene.SourceIdentity); }
+            foreach (var asset in request.Manifest.LooseAssets) { ValidatePayload(asset.SourceIdentity); }
+            string contentRoot = Path.Combine(request.WorkingRoot, "content");
+            string[] sources = Directory.GetFiles(StagingRoot, "*", SearchOption.AllDirectories)
+                .Where(path => !Path.GetRelativePath(StagingRoot, path).Replace('\\', '/').StartsWith("_builder/", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !Path.GetRelativePath(StagingRoot, path).Replace('\\', '/').StartsWith("code/", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !Path.GetFileName(path).StartsWith("runtime-", StringComparison.OrdinalIgnoreCase)).ToArray();
+            Directory.CreateDirectory(contentRoot);
+            foreach (string source in sources) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0) { throw new InvalidOperationException($"Staged symbolic links are unsupported: {source}"); }
+                string relative = Path.GetRelativePath(StagingRoot, source).Replace('\\', '/');
+                string cooked = relative.StartsWith("cooked/", StringComparison.OrdinalIgnoreCase) ? relative : "cooked/" + (relative.StartsWith("generated/", StringComparison.OrdinalIgnoreCase) ? relative[10..] : relative);
+                string destination = ContainedPath(contentRoot, cooked);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)); File.Copy(source, destination, true);
+            }
+            foreach (var workItem in request.Manifest.PlatformCookWorkItems) {
+                string source = ContainedPath(StagingRoot, workItem.SourceAssetPath);
+                if (!File.Exists(source)) { throw new FileNotFoundException("Builder-owned payload is missing.", source); }
+                string destination = ContainedPath(contentRoot, workItem.OutputRelativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)); File.Copy(source, destination, true);
+            }
+            if (request.ExecutionScope == PlatformBuildExecutionScope.Full) {
+                cancellationToken.ThrowIfCancellationRequested();
+                progress.Report(new PlatformBuildProgressUpdate("WebAssembly", "webgpu", 0, 1, "Compiling generated engine and browser host."));
+                string nativeRoot = string.IsNullOrWhiteSpace(request.NativeObjectCacheRoot) ? Path.Combine(request.WorkingRoot, "native") : request.NativeObjectCacheRoot;
+                WebGpuNativeBuildResult result = Executor.Build(RepositoryRoot, nativeRoot, request.GeneratedCoreCppRootPath, Path.Combine(StagingRoot, "code"), contentRoot, request.SelectedBuildProfileId, cancellationToken);
+                string[] artifacts = [result.JavaScriptPath, result.WebAssemblyPath, result.DataPath];
+                foreach (string artifact in artifacts) {
+                    if (!File.Exists(artifact) || new FileInfo(artifact).Length == 0) { throw new InvalidOperationException($"Native build omitted required artifact '{artifact}'."); }
+                }
+                Directory.CreateDirectory(request.OutputRoot);
+                foreach (string artifact in artifacts) {
+                    string destination = Path.Combine(request.OutputRoot, Path.GetFileName(artifact));
+                    File.Copy(artifact, destination, true); File.SetLastWriteTimeUtc(destination, DateTime.UtcNow);
+                }
+                string page = Path.Combine(RepositoryRoot, "web", "index.html");
+                if (File.Exists(page)) { File.Copy(page, Path.Combine(request.OutputRoot, "index.html"), true); }
+                foreach (string script in new[] { "bootstrap.js", "audio.js" }) {
+                    string source = Path.Combine(RepositoryRoot, "web", script);
+                    if (File.Exists(source)) { File.Copy(source, Path.Combine(request.OutputRoot, script), true); }
+                }
+                File.WriteAllText(Path.Combine(request.OutputRoot, "build-manifest.json"), JsonSerializer.Serialize(request.Manifest));
+            }
+            return Task.FromResult(new PlatformBuildReport(true, [],
+                request.Manifest.Scenes.Select(scene => new PlatformBuildItemOutcome(scene.SceneId, PlatformBuildItemOutcomeKind.Succeeded)).ToArray(),
+                request.Manifest.LooseAssets.Select(asset => new PlatformBuildItemOutcome(asset.AssetId, PlatformBuildItemOutcomeKind.Succeeded)).ToArray()));
+        } catch (OperationCanceledException) { throw; }
+        catch (Exception error) when (error is IOException || error is InvalidOperationException || error is ArgumentException || error is NotSupportedException) {
+            PlatformBuildDiagnostic diagnostic = new(PlatformBuildDiagnosticSeverity.Error, "WEBGPU_BUILD", error.Message, "", "", StagingRoot);
+            diagnostics.Report(diagnostic);
+            return Task.FromResult(new PlatformBuildReport(false, [diagnostic],
+                request.Manifest.Scenes.Select(scene => new PlatformBuildItemOutcome(scene.SceneId, PlatformBuildItemOutcomeKind.Failed)).ToArray(), []));
+        }
+    }
+
+    /// <summary>Requires scene and asset identities to identify existing files inside the staged package.</summary>
+    void ValidatePayload(string identity) {
+        string path = ContainedPath(StagingRoot, identity);
+        if (!File.Exists(path)) { throw new FileNotFoundException($"Required staged payload '{identity}' does not exist.", path); }
+    }
+
+    /// <summary>Rejects traversal and absolute paths escaping the intended filesystem root.</summary>
+    public static string ContainedPath(string root, string path) {
+        string canonicalRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string candidate = Path.GetFullPath(Path.Combine(canonicalRoot, path.Replace('/', Path.DirectorySeparatorChar)));
+        if (!candidate.StartsWith(canonicalRoot, StringComparison.OrdinalIgnoreCase)) { throw new InvalidOperationException($"Path '{path}' escapes root '{root}'."); }
+        return candidate;
+    }
+}
