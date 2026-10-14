@@ -16,5 +16,8 @@ public sealed class WebGpuPlatformDefinitionTests {
         Assert.Equal(PlatformCodegenLanguage.Cpp, codegen.OutputLanguage);
         Assert.Equal(PlatformSerializationEndianness.LittleEndian, codegen.Endianness);
         Assert.Contains(codegen.Settings, setting => setting.SettingId == "additional-preprocessor-symbols" && setting.DefaultValue == "DESKTOP_PLATFORM");
+        Assert.Contains(codegen.Settings, setting => setting.SettingId == PlatformCodegenSettingIds.EnabledFeatures && setting.DefaultValue.Contains("host_file_system"));
+        Assert.Contains(codegen.Settings, setting => setting.SettingId == "generated-math-convention" && setting.DefaultValue == "engine-row-vector");
+        Assert.Contains(codegen.Settings, setting => setting.SettingId == "pointer-size-bytes" && setting.DefaultValue == "4");
     }
 }
