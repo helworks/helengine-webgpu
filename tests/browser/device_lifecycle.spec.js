@@ -4,6 +4,11 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => window.moduleReady);
 });
 test('device_lifecycle initializes a real browser WebGPU device', async ({ page }) => {
+  const info = await page.evaluate(async () => {
+    const adapter = await navigator.gpu.requestAdapter();
+    return { vendor: adapter.info.vendor, architecture: adapter.info.architecture, device: adapter.info.device, description: adapter.info.description, fallback: adapter.info.isFallbackAdapter };
+  });
+  console.log('WebGPU adapter:', JSON.stringify(info));
   await page.evaluate(() => Module._he_test_start_gpu());
   await expect.poll(() => page.evaluate(() => Module._he_test_gpu_state())).toBe(2);
   expect(await page.evaluate(() => Module._he_test_resize(640, 360))).toBe(1);

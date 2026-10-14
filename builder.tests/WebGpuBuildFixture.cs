@@ -12,6 +12,12 @@ public sealed class WebGpuBuildFixture {
         Root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-webgpu\\managed-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(Root, "staged", "cooked", "scenes"));
         File.WriteAllText(Path.Combine(Root, "staged", "cooked", "scenes", "cube.helen"), "scene fixture");
+        Directory.CreateDirectory(Path.Combine(Root, "shaders"));
+        File.WriteAllText(Path.Combine(Root, "shaders", "basic_mesh.wgsl"), "shader fixture");
+        Directory.CreateDirectory(Path.Combine(Root, "web"));
+        File.WriteAllText(Path.Combine(Root, "web", "index.html"), "<!doctype html><title>fixture</title>");
+        File.WriteAllText(Path.Combine(Root, "web", "bootstrap.js"), "fixture bootstrap");
+        File.WriteAllText(Path.Combine(Root, "web", "audio.js"), "fixture audio");
     }
     /// <summary>Gets the fixture's absolute root.</summary>
     public string Root { get; }

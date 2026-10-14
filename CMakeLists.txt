@@ -22,7 +22,10 @@ else()
     message(FATAL_ERROR "Official generated core translation unit is missing.")
 endif()
 file(GLOB_RECURSE HOST_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
-file(GLOB CORE_RUNTIME_SOURCES "${HELENGINE_CORE_CPP_ROOT}/runtime/runtime_*manifest.cpp" "${HELENGINE_CORE_CPP_ROOT}/runtime/generated_*registration.cpp")
+set(CORE_RUNTIME_SOURCES
+    "${HELENGINE_CORE_CPP_ROOT}/runtime/runtime_startup_manifest.cpp"
+    "${HELENGINE_CORE_CPP_ROOT}/runtime/runtime_scene_catalog_manifest.cpp"
+    "${HELENGINE_CORE_CPP_ROOT}/runtime/runtime_code_module_manifest.cpp")
 add_executable(helengine_webgpu ${HOST_SOURCES} ${CORE_UNIT} ${CORE_RUNTIME_SOURCES})
 target_compile_features(helengine_webgpu PRIVATE cxx_std_20)
 target_include_directories(helengine_webgpu PRIVATE src "${HELENGINE_CORE_CPP_ROOT}")

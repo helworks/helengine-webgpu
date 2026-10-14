@@ -29,7 +29,18 @@ public sealed class WebGpuBuildWorkspace {
             }
             foreach (var scene in request.Manifest.Scenes) { ValidatePayload(scene.SourceIdentity); }
             foreach (var asset in request.Manifest.LooseAssets) { ValidatePayload(asset.SourceIdentity); }
-            string contentRoot = Path.Combine(request.WorkingRoot, "content");
+            string contentRoot = ContainedPath(request.WorkingRoot, "content");
+            if (IsWithin(StagingRoot, contentRoot) || IsWithin(RepositoryRoot, contentRoot) || IsWithin(request.OutputRoot, contentRoot) || IsWithin(contentRoot, request.OutputRoot)) {
+                throw new InvalidOperationException("Builder content must not overlap source or output roots.");
+            }
+            if (request.ExecutionScope == PlatformBuildExecutionScope.Full) {
+                foreach (string file in new[] { "index.html", "bootstrap.js", "audio.js" }) {
+                    string source = Path.Combine(RepositoryRoot, "web", file);
+                    if (!File.Exists(source) || new FileInfo(source).Length == 0) { throw new InvalidOperationException($"Required browser host file is missing or empty: {source}"); }
+                }
+            }
+            RejectLinks(StagingRoot);
+            if (Directory.Exists(contentRoot)) { RejectLinks(contentRoot); Directory.Delete(contentRoot, true); }
             string[] sources = Directory.GetFiles(StagingRoot, "*", SearchOption.AllDirectories)
                 .Where(path => !Path.GetRelativePath(StagingRoot, path).Replace('\\', '/').StartsWith("_builder/", StringComparison.OrdinalIgnoreCase))
                 .Where(path => !Path.GetRelativePath(StagingRoot, path).Replace('\\', '/').StartsWith("code/", StringComparison.OrdinalIgnoreCase))
@@ -50,6 +61,11 @@ public sealed class WebGpuBuildWorkspace {
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)); File.Copy(source, destination, true);
             }
             if (request.ExecutionScope == PlatformBuildExecutionScope.Full) {
+                string shaderRoot = Path.Combine(RepositoryRoot, "shaders");
+                if (!Directory.Exists(shaderRoot)) { throw new DirectoryNotFoundException("WebGPU platform shaders are missing."); }
+                string cookedShaders = Path.Combine(contentRoot, "platform", "webgpu");
+                Directory.CreateDirectory(cookedShaders);
+                foreach (string shader in Directory.GetFiles(shaderRoot, "*.wgsl")) { File.Copy(shader, Path.Combine(cookedShaders, Path.GetFileName(shader)), true); }
                 cancellationToken.ThrowIfCancellationRequested();
                 progress.Report(new PlatformBuildProgressUpdate("WebAssembly", "webgpu", 0, 1, "Compiling generated engine and browser host."));
                 string nativeRoot = string.IsNullOrWhiteSpace(request.NativeObjectCacheRoot) ? Path.Combine(request.WorkingRoot, "native") : request.NativeObjectCacheRoot;
@@ -64,10 +80,12 @@ public sealed class WebGpuBuildWorkspace {
                     File.Copy(artifact, destination, true); File.SetLastWriteTimeUtc(destination, DateTime.UtcNow);
                 }
                 string page = Path.Combine(RepositoryRoot, "web", "index.html");
-                if (File.Exists(page)) { File.Copy(page, Path.Combine(request.OutputRoot, "index.html"), true); }
+                File.Copy(page, Path.Combine(request.OutputRoot, "index.html"), true);
+                File.SetLastWriteTimeUtc(Path.Combine(request.OutputRoot, "index.html"), DateTime.UtcNow);
                 foreach (string script in new[] { "bootstrap.js", "audio.js" }) {
                     string source = Path.Combine(RepositoryRoot, "web", script);
-                    if (File.Exists(source)) { File.Copy(source, Path.Combine(request.OutputRoot, script), true); }
+                    File.Copy(source, Path.Combine(request.OutputRoot, script), true);
+                    File.SetLastWriteTimeUtc(Path.Combine(request.OutputRoot, script), DateTime.UtcNow);
                 }
                 File.WriteAllText(Path.Combine(request.OutputRoot, "build-manifest.json"), JsonSerializer.Serialize(request.Manifest));
             }
@@ -87,6 +105,23 @@ public sealed class WebGpuBuildWorkspace {
     void ValidatePayload(string identity) {
         string path = ContainedPath(StagingRoot, identity);
         if (!File.Exists(path)) { throw new FileNotFoundException($"Required staged payload '{identity}' does not exist.", path); }
+    }
+
+    /// <summary>Checks absolute root relationships before removing builder-owned staged content.</summary>
+    static bool IsWithin(string candidate, string root) {
+        string canonicalRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        string canonicalCandidate = Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar);
+        return canonicalCandidate.Equals(canonicalRoot, StringComparison.OrdinalIgnoreCase) || canonicalCandidate.StartsWith(canonicalRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Rejects directory junctions and file links without walking through their targets.</summary>
+    static void RejectLinks(string root) {
+        if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) { throw new InvalidOperationException($"Staged symbolic links are unsupported: {root}"); }
+        foreach (string entry in Directory.EnumerateFileSystemEntries(root)) {
+            FileAttributes attributes = File.GetAttributes(entry);
+            if ((attributes & FileAttributes.ReparsePoint) != 0) { throw new InvalidOperationException($"Staged symbolic links are unsupported: {entry}"); }
+            if ((attributes & FileAttributes.Directory) != 0) { RejectLinks(entry); }
+        }
     }
 
     /// <summary>Rejects traversal and absolute paths escaping the intended filesystem root.</summary>

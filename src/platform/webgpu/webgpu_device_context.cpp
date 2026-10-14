@@ -42,6 +42,8 @@ struct WebGpuDeviceContext::State {
         descriptor.deviceLostCallbackInfo.mode = WGPUCallbackMode_AllowSpontaneous;
         descriptor.deviceLostCallbackInfo.callback = DeviceLost;
         descriptor.deviceLostCallbackInfo.userdata1 = new std::weak_ptr<State>(state);
+        descriptor.uncapturedErrorCallbackInfo.callback = UncapturedError;
+        descriptor.uncapturedErrorCallbackInfo.userdata1 = state.get();
         WGPURequestDeviceCallbackInfo callback = WGPU_REQUEST_DEVICE_CALLBACK_INFO_INIT;
         callback.mode = WGPUCallbackMode_AllowSpontaneous;
         callback.callback = DeviceReady;
@@ -67,6 +69,11 @@ struct WebGpuDeviceContext::State {
     static void DeviceLost(WGPUDevice const*, WGPUDeviceLostReason, WGPUStringView message, void* userdata, void*) {
         std::unique_ptr<std::weak_ptr<State>> holder(static_cast<std::weak_ptr<State>*>(userdata));
         if (auto state = holder->lock()) state->Fail("Device lost: " + Message(message));
+    }
+    /// Makes invalid shaders, resource validation and out-of-memory failures terminal and visible.
+    static void UncapturedError(WGPUDevice const*, WGPUErrorType, WGPUStringView message, void* userdata, void*) {
+        // Emdawnwebgpu detaches this callback on Destroy, before State's device is released.
+        static_cast<State*>(userdata)->Fail(Message(message));
     }
 };
 

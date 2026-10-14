@@ -23,6 +23,7 @@ public sealed class WebGpuMaterialCooker {
             rgba = (rgba << 8) | 255;
         }
         request.FieldValues.TryGetValue("texture-relative-path", out string texture);
+        if (!string.IsNullOrEmpty(texture)) { throw new NotSupportedException($"Material '{request.MaterialAssetId}' requires texture-relative-path; textured 3D materials are not supported by this WebGPU milestone."); }
         PlatformMaterialAsset material = new PlatformMaterialAsset {
             Id = request.MaterialAssetId, RendererFamilyId = "webgpu", TextureRelativePath = texture ?? string.Empty,
             Lit = true, DoubleSided = false, UseVertexColor = false,

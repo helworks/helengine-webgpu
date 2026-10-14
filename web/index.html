@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HelEngine Player</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#111318;color:#e8ebf2}
+    body{margin:0;display:flex;flex-direction:column;height:100dvh}
+    header{display:flex;align-items:center;gap:1rem;padding:.6rem 1rem;background:#1b1f27}
+    header strong{font-size:.9rem}#helengine-status{font-size:.8rem;color:#b1bacd;flex:1}
+    button{background:#d7e3ff;color:#152440;border:0;border-radius:4px;padding:.5rem .9rem;font:inherit;cursor:pointer}
+    canvas{display:block;width:100%;min-height:0;flex:1;outline:0}
+    #helengine-error{margin:0;padding:1rem;background:#482a2e;color:#ffe5e5;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <header><strong>HelEngine</strong><span id="helengine-status" role="status">Loading…</span><button id="helengine-start">Enable audio</button></header>
+  <canvas id="helengine-canvas" tabindex="0" aria-label="Game canvas"></canvas>
+  <pre id="helengine-error" role="alert" hidden></pre>
+  <script src="audio.js"></script><script src="helengine_webgpu.js"></script><script src="bootstrap.js"></script>
+</body>
+</html>

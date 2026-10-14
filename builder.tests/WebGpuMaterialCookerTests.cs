@@ -28,6 +28,15 @@ public sealed class WebGpuMaterialCookerTests {
         Assert.Contains("cube-solid", error.Message);
     }
 
+    /// <summary>Fails during cooking when a material requires the later textured-3D milestone.</summary>
+    [Fact]
+    public void Texture_requirement_is_rejected_before_native_build() {
+        PlatformMaterialCookRequest request = new("textured-cube", "materials/textured.hasset", "webgpu", "release", "webgpu", "standard-shader",
+            new Dictionary<string, string> { ["base-color"] = "#ffffffff", ["use-custom-shader"] = "false", ["casts-shadow"] = "false", ["receives-shadow"] = "false", ["texture-relative-path"] = "textures/checker.hasset" });
+        NotSupportedException error = Assert.Throws<NotSupportedException>(() => new WebGpuMaterialCooker().Cook(request));
+        Assert.Contains("textured-cube", error.Message); Assert.Contains("texture", error.Message);
+    }
+
     /// <summary>Rejects malformed authored colors rather than manufacturing a fallback color.</summary>
     [Theory]
     [InlineData("#gggggg")]
