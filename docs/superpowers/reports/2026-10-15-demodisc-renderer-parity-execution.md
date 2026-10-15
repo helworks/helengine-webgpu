@@ -99,3 +99,20 @@ Nos três ciclos finais, o runtime físico permaneceu estável dentro de cada ce
 `C:\dev\helworks\helengine-webgpu\scripts\verify-demodisc-webgpu.ps1` exporta oficialmente e executa a auditoria e os testes. `-SkipBuild` exige uma exportação oficial concluída e artefatos frescos. As fixtures GPU devem estar compiladas nos diretórios documentados em `C:\dev\helworks\helengine-webgpu\README.md`.
 
 Os resultados completos deste aceite ficam em `C:\dev\helworks\builds\helengine-webgpu\renderer-parity\browser-report.json` e o recibo com hashes dos artefatos em `C:\dev\helworks\builds\helengine-webgpu\renderer-parity\verification-summary.json`.
+
+## Correção posterior: fontes nativas do menu
+
+O relato de fontes pequenas revelou quatro import settings sem perfil WebGPU. O menu usa `TextNativePixelMode.RoundUp`, que mantém `FontScale` em um; por isso a falta do perfil fazia o cook usar 32 px em todas as fontes, em vez dos tamanhos desktop originais.
+
+Foram adicionadas somente as seções de fonte WebGPU nos quatro assets em `C:\dev\helprojs\demodisc\assets\fonts`, usando o serializer oficial. A preparação em `C:\dev\helworks\helengine-webgpu\tests\content\DemoDiscWebGpuContentVerifier.cs` também declara esses perfis quando ausentes e preserva perfis WebGPU já definidos.
+
+| Fonte | Pixels antes | Pixels depois | Altura de linha no pacote final |
+| --- | ---: | ---: | ---: |
+| DemoDiscMenuButtons | 32 | 64 | 74,3125 |
+| DemoDiscMenuCarousel | 32 | 32 | 37,15625 |
+| DemoDiscMenuTitle | 32 | 69 | 80,118164 |
+| DemoDiscSceneUi | 32 | 40 | 46,445312 |
+
+A exportação oficial `333a8617-7213-4572-b993-7139a4fb3435` terminou em `2026-10-15T18:20:32.7855519Z`, com status `succeeded` e saída zero. O builder recompôs os artefatos pelo fluxo normal. As quatro fontes extraídas do `.data` final têm as métricas da tabela; as quatro faixas baixadas do pacote público em `https://pedometer-stranger-ahead.ngrok-free.dev/helworks/` têm os mesmos SHA-256. Ao remover a nova seção WebGPU e serializar novamente cada import setting, os bytes coincidem com os quatro arquivos originais, confirmando a preservação dos outros perfis.
+
+As evidências desta correção ficam em `C:\dev\helworks\builds\helengine-webgpu\renderer-parity\font-scale\export.log`, `C:\dev\helworks\builds\helengine-webgpu\renderer-parity\font-scale\final-font-comparison.log` e `C:\dev\helworks\builds\helengine-webgpu\renderer-parity\font-scale\public-fonts.json`. A suíte de 89 testes descrita acima corresponde ao aceite anterior; não foi repetida nesta correção.

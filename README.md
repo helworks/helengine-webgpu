@@ -6,6 +6,8 @@ Builder de navegador integrado ao fluxo de plataformas da HelEngine. Os scripts 
 
 O destino WebGPU seleciona 37 cenas, os módulos DemoDisc, Raytracing, TiltPlay e Zombislayer e os assets HD. As duas variantes handheld ficam fora desta seleção. A validação final está registrada em `C:\dev\helworks\helengine-webgpu\docs\superpowers\reports\2026-10-15-demodisc-renderer-parity-execution.md`.
 
+A preparação inclui os perfis WebGPU das fontes nativas do DemoDisc para a mesma referência desktop de 1280×720: botões de 64 px, carrossel de 32 px, título de 69 px e UI das cenas de 40 px. Os tamanhos vêm dos perfis Windows originais, evitando que a importação use 32 px por falta do perfil WebGPU. Perfis WebGPU já definidos são preservados.
+
 Aceite local concluído em 2026-10-15: 37/37 cenas e 89/89 testes de navegador passaram no pacote oficial, além dos testes gerenciados, de conteúdo e de builds incrementais.
 
 Recursos implementados:

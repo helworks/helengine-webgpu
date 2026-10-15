@@ -9,7 +9,7 @@ using System.Text.Json.Nodes;
 
 namespace helengine.webgpu.content;
 
-/// <summary>Prepares missing browser material overrides with official binary serializers and verifies all desktop scenes.</summary>
+/// <summary>Prepares missing browser material and font profiles with official binary serializers and verifies all desktop scenes.</summary>
 public static class DemoDiscWebGpuContentVerifier {
     /// <summary>Formats stable audit/settings JSON without changing any binary material contracts.</summary>
     static readonly JsonSerializerOptions JsonOptions=new() {WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase};
@@ -29,6 +29,7 @@ public static class DemoDiscWebGpuContentVerifier {
         PrepareGroups(projectRoot,proposed);
         List<object> materialAudit=PrepareMaterials(projectRoot,proposed);
         List<object> gallery=VerifyGallery(projectRoot,proposed);
+        List<object> fonts=PrepareFonts(projectRoot,proposed);
         string[] changed=proposed.Where(value=>!File.Exists(value.Key) || !File.ReadAllBytes(value.Key).SequenceEqual(value.Value)).Select(value=>value.Key).Order(StringComparer.Ordinal).ToArray();
         if(apply) foreach(string path in changed) {Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllBytes(path,proposed[path]);}
         bool preserved=existingOverrides.All(value=>File.Exists(value.Key) && Hash(value.Key)==value.Value);
@@ -36,9 +37,28 @@ public static class DemoDiscWebGpuContentVerifier {
         string[] runtimeModules=Directory.GetFiles(Path.Combine(projectRoot,"assets/codebase"),"code.module.json",SearchOption.AllDirectories).Select(path=>JsonNode.Parse(File.ReadAllText(path)))
             .Where(value=>(string)value["moduleKind"]=="runtime").Select(value=>(string)value["moduleId"]).Order(StringComparer.Ordinal).ToArray();
         var audit=new {ProjectRoot=projectRoot,Applied=apply,Scenes=scenes,ChangedFiles=changed,ExistingOverridesPreserved=preserved,RuntimeModules=runtimeModules,Gallery=gallery,Materials=materialAudit,Menu=VerifyMenu(),BakedMenu=ReadBakedMenu(projectRoot),
-            RuntimeRequirementEvidence="Read expanded scene/module/runtime requirements from the official export manifest; raw inventory physicsFlags are not used."};
+            Fonts=fonts,RuntimeRequirementEvidence="Read expanded scene/module/runtime requirements from the official export manifest; raw inventory physicsFlags are not used."};
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath));File.WriteAllText(reportPath,JsonSerializer.Serialize(audit,JsonOptions),new UTF8Encoding(false));
         Console.WriteLine($"Desktop scenes={scenes.Length}; materials={materialAudit.Count}; gallery={gallery.Count}; proposed changes={changed.Length}; applied={apply}; report={reportPath}");
+    }
+
+    /// <summary>Declares the original 720p desktop font sizes for WebGPU so native-pixel text never falls back to the generic 32-pixel import default.</summary>
+    static List<object> PrepareFonts(string root,Dictionary<string,byte[]> proposed) {
+        List<object> fonts=[];
+        foreach(string name in new[]{"DemoDiscMenuButtons","DemoDiscMenuCarousel","DemoDiscMenuTitle","DemoDiscSceneUi"}) {
+            string path=Path.Combine(root,"assets/fonts",name+".ttf.hasset");
+            using var input=File.OpenRead(path);
+            var settings=SectionedAssetImportSettingsBinarySerializer.Deserialize(input);
+            if(!settings.Processor.Platforms.TryGetValue("windows",out var desktop) || !desktop.Sections.ContainsKey(FontAssetPlatformSettingsSectionDefinition.SectionIdValue)) throw new InvalidDataException("Missing authored desktop font profile: "+path);
+            bool existing=settings.Processor.Platforms.TryGetValue("webgpu",out var browser) && browser.Sections.ContainsKey(FontAssetPlatformSettingsSectionDefinition.SectionIdValue);
+            if(!existing) {
+                if(browser==null) {browser=new AssetPlatformProcessorSettings();settings.Processor.Platforms.Add("webgpu",browser);}
+                browser.Font=new FontAssetProcessorSettings {PixelSize=desktop.Font.PixelSize,SnapHorizontalMetricsToPixels=desktop.Font.SnapHorizontalMetricsToPixels};
+                using var output=new MemoryStream();SectionedAssetImportSettingsBinarySerializer.Serialize(output,settings);proposed[path]=output.ToArray();
+            }
+            fonts.Add(new {Font=name,ExistingOverride=existing,DesktopPixels=desktop.Font.PixelSize,WebGpuPixels=browser.Font.PixelSize});
+        }
+        return fonts;
     }
 
     /// <summary>Checks the persisted scene metadata consumed by the runtime, independently of the source catalog.</summary>
