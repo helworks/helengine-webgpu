@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable><DefineConstants>$(DefineConstants);DESKTOP_PLATFORM</DefineConstants></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../helengine/engine/helengine.editor/helengine.editor.csproj" />
+    <ProjectReference Include="../../builder/helengine.webgpu.builder.csproj" />
+    <Using Include="helengine" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/DemoDiscSceneCatalog.cs" Link="original/DemoDiscSceneCatalog.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/DemoDiscPhysicsSceneEntry.cs" Link="original/DemoDiscPhysicsSceneEntry.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/DemoDiscGameSceneEntry.cs" Link="original/DemoDiscGameSceneEntry.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/MenuItemDefinition.cs" Link="original/MenuItemDefinition.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/MenuActionDefinition.cs" Link="original/MenuActionDefinition.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu/MenuActionKind.cs" Link="original/MenuActionKind.cs" />
+  </ItemGroup>
+</Project>
