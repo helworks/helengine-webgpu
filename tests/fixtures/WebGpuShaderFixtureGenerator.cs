@@ -16,11 +16,11 @@ public static class WebGpuShaderFixtureGenerator {
         string root = Path.GetFullPath(arguments[0]); Directory.CreateDirectory(root);
         List<PlatformShaderDependency> dependencies = [];
         List<PlatformShaderArtifactCookSource> sources = [];
-        foreach (string asset in new[] { "ForwardStandardShader", "SpriteBatchShader", "EditorShadowDepth" }) {
+        foreach (string asset in new[] { "ForwardStandardShader", "SpriteBatchShader", "EditorShadowDepth", "EditorPointShadowDepth" }) {
             string path = Path.Combine(FindRepository(), "..", "helengine", "engine", "helengine.editor", "shaders", "builtin", asset + ".hlsl");
             string text = File.ReadAllText(path);
             sources.Add(Source(asset, path, text));
-            foreach (string variant in asset == "SpriteBatchShader" ? new[] { "Textured", "RoundedShape" } : asset == "EditorShadowDepth" ? new[] { "default" } : new[] { "default", "ForwardStandard", "ForwardStandardShadowed", "ShadowDepth" }) {
+            foreach (string variant in asset == "SpriteBatchShader" ? new[] { "Textured", "RoundedShape" } : asset.StartsWith("Editor",StringComparison.Ordinal) ? new[] { "default" } : new[] { "default", "ForwardStandard", "ForwardStandardShadowed", "ShadowDepth" }) {
                 dependencies.Add(new PlatformShaderDependency(asset, asset + ".vs", asset + ".ps", variant));
             }
         }

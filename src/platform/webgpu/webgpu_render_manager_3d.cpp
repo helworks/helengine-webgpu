@@ -109,7 +109,7 @@ RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path
     Frame.Shaders->Pipeline(*material->Program,false,metadata.at("renderState"));
     return material.release();
 }
-RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, 4, 0); }
+RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, 4, 4); }
 void WebGpuRenderManager3D::Draw() {
     Core* core = get_OwnerCore();
     if (!core) throw std::runtime_error("WebGPU renderer has no owning core");

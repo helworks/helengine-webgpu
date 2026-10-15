@@ -29,7 +29,13 @@ void WebGpuShadowPlan::PrepareForCamera(float3 cameraPosition,float3 cameraForwa
             if(light.Range<=0.1f) throw std::runtime_error("Point shadow range must exceed its 0.1 near plane");
             entry.CubeIndex=cubeIndex++; entry.Width=entry.Height=CubeSize;
             float4x4::CreatePerspectiveFieldOfView__out4(3.141592653589793/2,1,0.1f,light.Range,projection);
-            for(int face=0;face<6;++face) entry.FaceMatrices[face]=Projection(light.Position,faces[face],faceUps[face],projection);
+            for(int face=0;face<6;++face) {
+                auto orientedProjection=projection;
+                // Convert the desktop RH face bases to WebGPU's native cube sampling coordinates.
+                if(face<4) orientedProjection.M22=-orientedProjection.M22;
+                else orientedProjection.M11=-orientedProjection.M11;
+                entry.FaceMatrices[face]=Projection(light.Position,faces[face],faceUps[face],orientedProjection);
+            }
         } else {
             entry.X=(atlasIndex%grid)*tile; entry.Y=(atlasIndex/grid)*tile; entry.Width=entry.Height=tile; ++atlasIndex;
             auto direction=Normalize(light.Direction); float3 position=light.Position;

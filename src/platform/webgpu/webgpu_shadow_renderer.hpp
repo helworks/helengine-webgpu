@@ -22,7 +22,13 @@ private:
     WGPUTextureView AtlasView = nullptr;
     std::shared_ptr<WebGpuShaderProgram> DepthProgram;
     WGPUBindGroup DepthBinding = nullptr;
+    std::array<WGPUTexture,4> Cubes{};
+    std::array<WGPUTextureView,4> CubeViews{};
+    std::array<std::array<WGPUTextureView,6>,4> CubeFaces{};
+    std::shared_ptr<WebGpuShaderProgram> PointDepthProgram;
+    WGPUBindGroup PointDepthBinding = nullptr;
     void AllocateAtlas();
-    void DrawCasters(WGPURenderPassEncoder pass, const std::vector<WebGpuShadowCaster>& casters, float4x4 matrix);
+    void AllocateCube(int index);
+    void DrawCasters(WGPURenderPassEncoder pass, const std::vector<WebGpuShadowCaster>& casters, float4x4 matrix, const WebGpuShadowEntry* point = nullptr);
 };
 }

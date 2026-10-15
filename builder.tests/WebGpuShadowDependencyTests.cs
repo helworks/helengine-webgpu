@@ -7,6 +7,12 @@ namespace helengine.webgpu.builder.tests;
 
 /// <summary>Requires backend shadow passes to travel through the same source-snapshot shader cooker as UI and materials.</summary>
 public sealed class WebGpuShadowDependencyTests {
+    /// <summary>The point pass must use the original radial-depth shader rather than an atlas or color substitute.</summary>
+    [Fact]
+    public void Renderer_declares_original_point_depth_shader() {
+        var dependency=Assert.Single(new WebGpuPlatformAssetBuilder().RendererShaderDependencies.Where(value=>value.ShaderAssetId=="EditorPointShadowDepth"));
+        Assert.Equal("EditorPointShadowDepth.vs",dependency.VertexProgramName); Assert.Equal("EditorPointShadowDepth.ps",dependency.PixelProgramName); Assert.Equal("default",dependency.VariantName);
+    }
     /// <summary>The atlas dependency must identify the original VS/PS source and produce a validated depth-only pair.</summary>
     [Fact]
     public void Renderer_declares_and_cooks_original_atlas_depth_shader() {
