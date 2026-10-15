@@ -35,12 +35,30 @@ public static class WebGpuShaderFixtureGenerator {
         File.WriteAllText(customPath, custom);
         dependencies.Add(new PlatformShaderDependency("matrix_fixture", "matrix_fixture.vs", "matrix_fixture.ps", "Mesh"));
         sources.Add(Source("matrix_fixture", customPath, custom));
+        foreach (string fixture in new[] { "shadow_probe", "shadow_depth" }) {
+            string path = Path.Combine(root, fixture + ".hlsl");
+            string source = fixture == "shadow_depth"
+                ? "float4 VS(float3 p:POSITION):SV_POSITION{return float4(p,1);} float PS():SV_DEPTH{return 0.25;}"
+                : """
+                  Texture2D<float> DepthAtlas:register(t1); TextureCube<float> DepthCube:register(t2);
+                  SamplerComparisonState CompareAtlas:register(s1); SamplerComparisonState CompareCube:register(s2);
+                  float4 VS(float3 p:POSITION):SV_POSITION{return float4(p,1);}
+                  float4 PS(float4 p:SV_POSITION):SV_TARGET {
+                      int stripe=min((int)(p.x*18.0/640.0),17); int face=stripe/3; int sampleIndex=stripe%3;
+                      float reference=sampleIndex==0?0.1:sampleIndex==1?0.5:0.9;
+                      float3 direction=face==0?float3(1,0,0):face==1?float3(-1,0,0):face==2?float3(0,1,0):face==3?float3(0,-1,0):face==4?float3(0,0,1):float3(0,0,-1);
+                      return float4(DepthAtlas.SampleCmpLevelZero(CompareAtlas,float2(0.5,0.5),reference),DepthCube.SampleCmpLevelZero(CompareCube,direction,reference),0,1);
+                  }
+                  """;
+            File.WriteAllText(path, source); sources.Add(Source(fixture, path, source));
+            dependencies.Add(new PlatformShaderDependency(fixture, fixture + ".vs", fixture + ".ps", "default"));
+        }
         new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Path.Combine(root, "shaders-content"), "webgpu", "release", "webgpu", dependencies, sources));
         var fields = WebGpuPlatformDefinitionFactory.Create().MaterialSchemas.Single().Fields.ToDictionary(field => field.FieldId, field => field.DefaultValue);
         fields["shader-asset-id"] = "matrix_fixture"; fields["vertex-program"] = "matrix_fixture.vs"; fields["pixel-program"] = "matrix_fixture.ps"; fields["use-custom-shader"] = "true";
         fields["variant"] = "Mesh";
         fields["lighting-mode"] = "unlit"; fields["double-sided"] = "true"; fields["depth-test"] = "false"; fields["depth-write"] = "false";
-        var compiled = WebGpuShaderArtifactSerializer.Deserialize(File.ReadAllBytes(Path.Combine(root, "shaders-content", WebGpuShaderArtifactIdentity.RelativePath(dependencies.Last()))));
+        var compiled = WebGpuShaderArtifactSerializer.Deserialize(File.ReadAllBytes(Path.Combine(root, "shaders-content", WebGpuShaderArtifactIdentity.RelativePath(dependencies.Single(value => value.ShaderAssetId == "matrix_fixture")))));
         var layout = compiled.Metadata.GetProperty("bindings")[0].GetProperty("sourceLayout");
         byte[] data = new byte[layout.GetProperty("size").GetInt32()];
         for (int index = 0; index < 8; ++index) { BinaryPrimitives.WriteSingleLittleEndian(data.AsSpan(64 + index * 4), index < 4 ? 0.9f : index == 7 ? 1 : 0.5f); }

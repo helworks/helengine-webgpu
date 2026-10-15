@@ -1,5 +1,6 @@
 #pragma once
 #include "webgpu_shader_artifact_reader.hpp"
+#include "webgpu_pipeline_target.hpp"
 #include <webgpu/webgpu.h>
 #include <map>
 #include <memory>
@@ -22,14 +23,19 @@ public:
     std::shared_ptr<WebGpuShaderProgram> Load(const std::string& path);
     std::shared_ptr<WebGpuShaderProgram> Load(const std::string& path, std::span<const std::byte> bytes);
     WGPURenderPipeline Pipeline(WebGpuShaderProgram& program, bool ui, const ArtifactJson& state);
+    WGPURenderPipeline Pipeline(WebGpuShaderProgram& program, bool ui, const ArtifactJson& state, const WebGpuPipelineTarget& target);
     WGPUBindGroup CreateBinding(WebGpuShaderProgram& program, const std::map<std::string,WGPUTextureView>& textures);
     void Bind(WGPURenderPassEncoder pass, WebGpuShaderProgram& program, WGPUBindGroup binding, const std::map<std::string,std::vector<std::byte>>& constants);
 private:
     WebGpuFrame& Frame;
     std::map<std::string,std::shared_ptr<WebGpuShaderProgram>> Programs;
     WGPUSampler Sampler = nullptr;
+    WGPUSampler ComparisonSampler = nullptr;
     WGPUTexture White = nullptr, Black = nullptr, Cube = nullptr;
     WGPUTextureView WhiteView = nullptr, BlackView = nullptr, CubeView = nullptr;
+    WGPUTexture InactiveDepth = nullptr, InactiveDepthCube = nullptr;
+    WGPUTextureView InactiveDepthView = nullptr, InactiveDepthCubeView = nullptr;
     WGPUTexture CreateSolid(bool cube, bool black);
+    WGPUTexture CreateInactiveDepth(bool cube);
 };
 }

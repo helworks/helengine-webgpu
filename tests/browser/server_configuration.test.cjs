@@ -20,3 +20,14 @@ test('configured roots require all four nonempty exported package artifacts', ()
   fs.writeFileSync(path.join(root, 'helengine_webgpu.data'), 'fixture');
   assert.equal(resolvePlayerRoot(root), root);
 });
+
+test('shader fixture roots reject invalid explicit paths and incomplete outputs', () => {
+  const { resolveShaderRoot } = require('./shader-root');
+  assert.throws(() => resolveShaderRoot(''), /absolute/i);
+  assert.throws(() => resolveShaderRoot('relative'), /absolute/i);
+  const root = path.resolve('C:/dev/helworks/builds/helengine-webgpu/renderer-parity/server-tests/' + randomUUID());
+  fs.mkdirSync(root, { recursive: true });
+  assert.throws(() => resolveShaderRoot(root), /missing/i);
+  for (const name of ['index.html', 'shared.js', 'shared.wasm', 'shared.data', 'shadows.html', 'shadows.js', 'shadows.wasm', 'shadows.data']) fs.writeFileSync(path.join(root, name), 'fixture');
+  assert.equal(resolveShaderRoot(root), root);
+});
