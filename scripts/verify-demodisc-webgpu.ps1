@@ -11,10 +11,17 @@ $engine=Join-Path (Split-Path -Parent $repository) 'helengine'
 $player=Join-Path $OutputRoot 'player'
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 function Invoke-Checked([string]$Log,[scriptblock]$Command) {
-    & $Command *> $Log
-    $result=$LASTEXITCODE
+    $previousErrorAction=$ErrorActionPreference
+    try {
+        # Windows PowerShell wraps native stderr as ErrorRecord even for exit zero.
+        # Retain that stream, then decide success from the actual process exit code.
+        $ErrorActionPreference='Continue'
+        $global:LASTEXITCODE=$null
+        & $Command *> $Log
+        $result=$LASTEXITCODE
+    } finally {$ErrorActionPreference=$previousErrorAction}
     Get-Content -LiteralPath $Log -Tail 10
-    if($result -ne 0){throw "Validation command failed ($result). Full log: $Log"}
+    if($null -eq $result -or $result -ne 0){throw "Validation command failed ($result). Full log: $Log"}
 }
 Push-Location $repository
 try {
@@ -36,6 +43,8 @@ try {
     Invoke-Checked (Join-Path $OutputRoot 'verification-content.log') {dotnet run --project tests/content/helengine.webgpu.content.csproj --disable-build-servers -- --project-root (Split-Path -Parent $Project) --report (Join-Path $OutputRoot 'content-audit.json')}
     Invoke-Checked (Join-Path $OutputRoot 'verification-managed.log') {dotnet test builder.tests/helengine.webgpu.builder.tests.csproj --disable-build-servers --artifacts-path (Join-Path $OutputRoot 'dotnet')}
     Invoke-Checked (Join-Path $OutputRoot 'verification-server.log') {node --test tests/browser/server_configuration.test.cjs tests/browser/cooked-shader-corruption.test.cjs}
+    Invoke-Checked (Join-Path $OutputRoot 'verification-command-runner.log') {powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/verify-command.tests.ps1 -OutputRoot (Join-Path $OutputRoot 'script-tests')}
+    Invoke-Checked (Join-Path $OutputRoot 'verification-preload-rebuild.log') {powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/preload-rebuild.tests.ps1 -OutputRoot (Join-Path $OutputRoot 'preload-rebuild')}
     $env:HELENGINE_WEBGPU_TEST_PLAYER_ROOT=$player
     $env:HELENGINE_WEBGPU_TEST_SHADER_ROOT=Join-Path $OutputRoot 'shader-tests'
     $env:PLAYWRIGHT_JSON_OUTPUT_NAME=Join-Path $OutputRoot 'browser-report.json'

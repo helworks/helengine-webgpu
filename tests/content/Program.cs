@@ -4,6 +4,19 @@ namespace helengine.webgpu.content;
 public static class Program {
     /// <summary>Requires explicit project/report paths and applies only the requested WebGPU content changes.</summary>
     public static int Main(string[] arguments) {
+        if(arguments.Contains("--inspect-rendering-lights")) {
+            string root=Value(arguments,"--project-root");
+            foreach(string path in Directory.GetFiles(Path.Combine(root,"assets/scenes/rendering"),"*.helen")) {
+                using var input=new MemoryStream(File.ReadAllBytes(path));var scene=(SceneAsset)helengine.files.EditorAssetBinarySerializer.Deserialize(input);
+                List<SceneEntityAsset> entities=[];void Visit(SceneEntityAsset entity){entities.Add(entity);foreach(var child in entity.Children)Visit(child);}foreach(var entity in scene.RootEntities)Visit(entity);
+                foreach(var entity in entities) foreach(var record in entity.Components.Where(record=>record.ComponentTypeId.Contains("LightComponent",StringComparison.Ordinal))) {
+                    var service=new helengine.editor.ComponentPlatformOverridePayloadService();
+                    void Dump(string scope,byte[] payload){var fields=new helengine.editor.EditorTaggedSceneComponentFieldReader(payload);Dictionary<string,object> values=[];foreach(string name in new[]{"ShadowsEnabled","ShadowMapMode","ShadowStrength","Intensity"}) if(fields.TryGetFieldReader(name,out var reader))using(reader){values[name]=name is "ShadowsEnabled" or "ShadowMapMode" ? reader.ReadByte() : reader.ReadSingle();}Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new {Scene=Path.GetFileName(path),Entity=entity.Name,Type=record.ComponentTypeId,Scope=scope,Values=values}));}
+                    Dump("Common",service.UnwrapBaseRecord(record).Payload);foreach(var state in service.ReadOverrideStates(record))Dump(state.Scope.ToString(),state.Payload);
+                }
+            }
+            return 0;
+        }
         if(arguments.Contains("--inspect-tilt-refs")) {
             string root=Value(arguments,"--project-root");
             foreach(string path in Directory.GetFiles(Path.Combine(root,"assets/scenes/games/tilt"),"tilt_trial_level_*.helen")) {

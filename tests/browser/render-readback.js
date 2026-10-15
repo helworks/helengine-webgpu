@@ -26,8 +26,18 @@ async function readback(page) {
       }
     }
     const upperRight = pixel(canvas.width - 5, 5);
+    let scenePixels = 0;
+    const sceneColors = new Set();
+    // Sample the central scene area above the bottom-left controls panel.
+    for (let y = Math.floor(canvas.height * 0.2); y < canvas.height * 0.55; y += 3) {
+      for (let x = Math.floor(canvas.width * 0.2); x < canvas.width * 0.8; x += 3) {
+        const color = pixel(x, y);
+        if (color.some((value, index) => Math.abs(value - background[index]) > 10)) scenePixels++;
+        sceneColors.add(color.join(','));
+      }
+    }
     buffer.unmap(); buffer.destroy();
-    return { background, center, upperRight, uiPixels, width: canvas.width, height: canvas.height };
+    return { background, center, upperRight, uiPixels, scenePixels, sceneColors: sceneColors.size, width: canvas.width, height: canvas.height };
   });
 }
 module.exports = { readback };

@@ -6,6 +6,8 @@ Builder de navegador integrado ao fluxo de plataformas da HelEngine. Os scripts 
 
 O destino WebGPU seleciona 37 cenas, os módulos DemoDisc, Raytracing, TiltPlay e Zombislayer e os assets HD. As duas variantes handheld ficam fora desta seleção. A validação final está registrada em `C:\dev\helworks\helengine-webgpu\docs\superpowers\reports\2026-10-15-demodisc-renderer-parity-execution.md`.
 
+Aceite local concluído em 2026-10-15: 37/37 cenas e 89/89 testes de navegador passaram no pacote oficial, além dos testes gerenciados, de conteúdo e de builds incrementais.
+
 Recursos implementados:
 
 - Malhas indexadas, UVs, submeshes, TriangleList e LineList; estados de culling, transparência e profundidade dos materiais.
@@ -67,3 +69,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\dev\helworks\helengine-we
 `-SkipBuild` verifica uma exportação oficial já concluída, exigindo estado de sucesso e artefatos frescos. O script executa auditoria de conteúdo, testes do builder, configuração do servidor e toda a suíte de navegador, incluindo as 37 cenas e ciclos de carregamento/descarte. As fixtures GPU devem ter sido compiladas pelos scripts `C:\dev\helworks\helengine-webgpu\scripts\build-*-tests.ps1` com os caminhos de saída usados pela suíte.
 
 Os testes usam Chrome com WebGPU e leem pixels numericamente. Screenshots, vídeos e traces ficam desativados. Falta de adapter falha explicitamente. Evidências e resultados ficam em `C:\dev\helworks\builds\helengine-webgpu\renderer-parity`.
+
+A verificação também cobre builds incrementais do preload: editar, restaurar, adicionar ou remover assets deve atualizar o `.data`, mesmo quando o cache preserva timestamps antigos. O CMake usa as dependências dos arquivos e um inventário por SHA256; conteúdo inalterado pode reaproveitar o pacote.

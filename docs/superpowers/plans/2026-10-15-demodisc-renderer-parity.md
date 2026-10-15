@@ -10,6 +10,20 @@
 
 **Spec:** C:\dev\helworks\helengine-webgpu\docs\superpowers\specs\2026-10-15-demodisc-renderer-parity-proposal.md (native depth architecture approved 2026-10-15).
 
+## Execution status — 2026-10-15
+
+The original steps below describe the planned workflow. This table records the implemented outcome and the source-contract adaptations discovered during execution.
+
+| Tasks | Outcome | Evidence |
+| --- | --- | --- |
+| 1–5: shader contracts, depth resources, all light families and shadows | Implemented | Backend commits 8375c9c, 59cb8f5, 6121d8e, c5ce007, 971ad5e; numeric atlas/cube/receiver fixtures |
+| 6: geometry and camera targets | Implemented for the existing ModelAsset contract | Commit 8f0b908; target chaining, uniform growth, shared transparency and mesh fixtures. Original ModelAsset has no color stream and only TriangleList/LineList; required missing color streams remain explicit errors. None of the 77 DemoDisc materials requests them. |
+| 7: desktop content | Implemented | 37 unique scene IDs, 77 materials, 25 exact gallery parameter sets, HD membership and original menu actions; audit proposes zero changes |
+| 8: original runtime modules and selected physics | Implemented | Official ninth export succeeds with four modules and HelPhysics; original ray tracer, kinematic paths, disposal and Tilt scene-registration fixes have source regressions |
+| 9: complete acceptance and handoff | Complete | Official final export 1c9e0b54-3c23-4430-a158-f73c2d1d0ba0 succeeded. All89 browser cases pass, including all37 exact manifest scene IDs;93 managed,5 Node,4 runner and5 real preload rebuild checks pass. Four artifact hashes verified. Independent review findings closed. Original-content limits are documented in the execution report. |
+
+Final evidence and original-content limits are recorded in C:\dev\helworks\helengine-webgpu\docs\superpowers\reports\2026-10-15-demodisc-renderer-parity-execution.md. Only C:\dev\helworks\helengine-webgpu is integrated into local main, as requested; engine/project branches remain separate.
+
 ## Global Constraints
 
 - Include 37 of 39 authored scenes. Exclude only `DemoDiscMainMenuHandheld.helen` and `games/tilt/tilt_trial_ds.helen`. Windows' existing 23-scene selection is not the inventory.
@@ -178,12 +192,12 @@ Expected X: Build Waiter succeeded/exit 0, four fresh nonempty files and a manif
 
 **Interfaces:** Scene-case table names every Task 7 scene ID, actual menu/level-select action sequence, return action and one scene-specific behavioral assertion. Use normal keyboard/gamepad controls to drive engine menus and original code; diagnostics observe progress. The verifier invokes X, explicit-root P and validates Build Waiter state/manifest/artifact freshness. It never accepts an old Cube package as full-player evidence.
 
-- [ ] Write RED flow cases for splash→desktop menu→loading→each demo/game→return. Cover all 12 physics scenes, all 14 rendering scenes, Tilt hub and five levels, Zombislayer and benchmark; verify boot/menu/loading as their own three cases. Assert each scene's actual loaded ID, required runtime components, advancing updates and expected render/gameplay observation. Software ray scenes must show increasing original sample counts and changed uploaded texture pixels; a static image does not pass.
-- [ ] Run P demodisc_full_flow.spec.js against the explicit X output and report each unmet scene separately. Fix defects at their owning layer; maintain the scene table rather than weakening assertions or removing failing scenes.
-- [ ] Exercise three complete menu/game/return cycles, additive level load/unload, ray-tracer cancellation on return, focus loss/resume, canvas resize and benchmark object growth. Assert no stale controls, duplicate services, uncaptured GPU errors, unresolved assets, runaway retained resources or detached running scripts.
-- [ ] Run all builder tests, native readers, GPU fixtures, explicit-root browser suite and final X. Retain logs and per-scene results in B. Acceptance requires 37/37 scene cases and all required artifacts, authored gallery checks, all shadow families, selected physics and four original modules. Keep screenshots/video/traces off.
-- [ ] Obtain one fresh whole-branch review under executing-plans; fix findings and rerun affected checks before claiming completion. Reviewer default model is gpt-6.1-sol with high reasoning per Helena's AGENTS instructions unless she specifies otherwise. Preserve unrelated dirty files.
-- [ ] Commit final fixes/report; present the full-player preview URL, exact output path, scene count and any remaining evidenced limitation. A blocking architectural issue leaves the objective incomplete; do not label the Cube preview as the complete DemoDisc.
+- [x] Write RED flow cases for splash→desktop menu→loading→each demo/game→return. Cover all 12 physics scenes, all 14 rendering scenes, Tilt hub and five levels, Zombislayer and benchmark; verify boot/menu/loading as their own three cases. Assert each scene's actual loaded ID, required runtime components, advancing updates and expected render/gameplay observation. Software ray scenes must show increasing original sample counts and changed uploaded texture pixels; a static image does not pass.
+- [x] Run P demodisc_full_flow.spec.js against the explicit X output and report each unmet scene separately. Fix defects at their owning layer; maintain the scene table rather than weakening assertions or removing failing scenes.
+- [x] Exercise three complete menu/game/return cycles, additive level load/unload, ray-tracer cancellation on return, focus loss/resume, canvas resize and benchmark object growth. Assert no stale controls, duplicate services, uncaptured GPU errors, unresolved assets, runaway retained resources or detached running scripts.
+- [x] Run all builder tests, native readers, GPU fixtures, explicit-root browser suite and final X. Retain logs and per-scene results in B. Acceptance requires 37/37 scene cases and all required artifacts, authored gallery checks, all shadow families, selected physics and four original modules. Keep screenshots/video/traces off.
+- [x] Obtain one fresh whole-branch review under executing-plans; fix findings and rerun affected checks before claiming completion. Reviewer default model is gpt-6.1-sol with high reasoning per Helena's AGENTS instructions unless she specifies otherwise. Preserve unrelated dirty files.
+- [x] Commit final fixes/report; present the full-player preview URL, exact output path, scene count and any remaining evidenced limitation. A blocking architectural issue leaves the objective incomplete; do not label the Cube preview as the complete DemoDisc.
 
 ## Self-review and Handoff
 
