@@ -4,6 +4,8 @@
 #include "IRenderVisitor3D.hpp"
 #include "float4x4.hpp"
 #include "float4.hpp"
+#include "webgpu_light_state.hpp"
+#include "webgpu_shadow_plan.hpp"
 
 namespace helengine::webgpu {
 class WebGpuRenderManager2D;
@@ -37,6 +39,9 @@ private:
     WGPURenderPassEncoder Pass = nullptr;
     /// Stores current camera and light constants.
     float4x4 ViewProjection;
-    float4 LightDirection, LightColor, CameraPosition;
+    float4 CameraPosition;
+    WebGpuLightState Lights;
+    WebGpuShadowPlan ShadowPlan;
+    ArtifactJson ForwardValues;
 };
 }

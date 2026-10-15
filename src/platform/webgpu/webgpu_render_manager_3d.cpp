@@ -107,7 +107,7 @@ RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path
     Frame.Shaders->Pipeline(*material->Program,false,metadata.at("renderState"));
     return material.release();
 }
-RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, 1, 0); }
+RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, 4, 0); }
 void WebGpuRenderManager3D::Draw() {
     Core* core = get_OwnerCore();
     if (!core) throw std::runtime_error("WebGPU renderer has no owning core");
@@ -129,15 +129,9 @@ void WebGpuRenderManager3D::Draw() {
         float4x4::CreateLookAt__ref0_ref1_ref2_out3(position, target, up, view);
         projection = CameraProjectionUtils::CreateProjection(camera, width / height);
         float4x4::Multiply__ref0_ref1_out2(view, projection, ViewProjection);
-        LightDirection = float4(0, 0, 1, 0); LightColor = float4(0, 0, 0, 0);
-        auto* lights = core->get_ObjectManager()->get_DirectionalLights();
-        for (int32_t lightIndex = 0; lightIndex < lights->Count(); ++lightIndex) {
-            auto* light = (*lights)[lightIndex];
-            if (!light->get_Parent()->get_IsHierarchyEnabled() || !(light->get_Parent()->get_LayerMask() & camera->get_LayerMask())) continue;
-            auto direction = float4::RotateVector(float3(0, 0, -1), light->get_Parent()->get_Orientation());
-            LightDirection = float4(direction.X, direction.Y, direction.Z, 1);
-            LightColor = light->get_Color() * light->get_Intensity(); break;
-        }
+        Lights.Prepare(core,camera,std::min(get_MaximumVisibleLights(),4));
+        ForwardValues=Lights.ForwardValues();
+        ShadowPlan.Prepare(camera,Lights,0);
         auto settings = camera->get_ClearSettings();
         auto clear = settings.get_ClearColor();
         WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
@@ -190,10 +184,9 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
                     else throw std::runtime_error("Unknown required engine transform member: "+field);
                 } else if(name=="ForwardLightBuffer") {
                     bool lit=state.at("lit").get<bool>();
-                    if(field=="ambientLightColor") FloatMember(member,lit?float4(0.2f,0.2f,0.2f,1):float4(1,1,1,1),bytes);
-                    else if(field=="lightMetadata") FloatMember(member,float4(lit&&LightDirection.W>0?1:0,0,0,0),bytes);
-                    else if(field=="light0ColorAndType") FloatMember(member,float4(LightColor.X,LightColor.Y,LightColor.Z,0),bytes);
-                    else if(field=="light0DirectionAndShadow") FloatMember(member,float4(LightDirection.X,LightDirection.Y,LightDirection.Z,0),bytes);
+                    if(!ForwardValues.contains(field)) throw std::runtime_error("Unknown required engine light member: "+field);
+                    auto& value=ForwardValues.at(field);
+                    FloatMember(member,lit?float4(value[0].get<float>(),value[1].get<float>(),value[2].get<float>(),value[3].get<float>()):field=="ambientLightColor"?float4(1,1,1,1):float4(0,0,0,0),bytes);
                 }
             }
         }
