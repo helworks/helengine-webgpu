@@ -52,7 +52,9 @@ private:
     /// Retains original shared shader variants and borrows their cached pipelines.
     std::shared_ptr<WebGpuShaderProgram> TexturedProgram, RoundedProgram;
     WGPUBindGroup RoundedBinding = nullptr;
+    uint64_t UniformGeneration = 0;
     WGPURenderPipeline Textured = nullptr, Rounded = nullptr;
+    WebGpuPipelineTarget ActiveTarget;
     /// Owns stable vertex/index arenas rather than allocating per drawable.
     WGPUBuffer Vertices = nullptr, Indices = nullptr;
     /// Holds the texture required by textureless rounded-shape batches.

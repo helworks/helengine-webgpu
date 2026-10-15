@@ -39,6 +39,7 @@ public:
     WGPUTextureView Depth = nullptr;
     /// Stores the reusable dynamic uniform buffer.
     WGPUBuffer Uniforms = nullptr;
+    uint64_t UniformGeneration = 1;
     /// Stores the device's ordered submission queue.
     WGPUQueue Queue = nullptr;
 private:
@@ -52,5 +53,6 @@ private:
     uint32_t CanvasWidth = 0, CanvasHeight = 0;
     /// Advances through the frame's aligned uniform storage.
     uint32_t UniformCursor = 0;
+    uint64_t UniformCapacity = 4 * 1024 * 1024;
 };
 }

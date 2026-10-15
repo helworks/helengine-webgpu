@@ -27,6 +27,7 @@ private:
     std::array<std::array<WGPUTextureView,6>,4> CubeFaces{};
     std::shared_ptr<WebGpuShaderProgram> PointDepthProgram;
     WGPUBindGroup PointDepthBinding = nullptr;
+    uint64_t UniformGeneration = 0;
     void AllocateAtlas();
     void AllocateCube(int index);
     void DrawCasters(WGPURenderPassEncoder pass, const std::vector<WebGpuShadowCaster>& casters, float4x4 matrix, const WebGpuShadowEntry* point = nullptr);

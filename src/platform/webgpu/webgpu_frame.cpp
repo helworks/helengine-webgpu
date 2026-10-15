@@ -3,12 +3,14 @@
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
+#include <algorithm>
+#include <limits>
 
 namespace helengine::webgpu {
 WebGpuFrame::WebGpuFrame(WebGpuDeviceContext& context) : Context(context) {
     Queue = wgpuDeviceGetQueue(Device());
     WGPUBufferDescriptor descriptor = WGPU_BUFFER_DESCRIPTOR_INIT;
-    descriptor.size = 1024 * 1024; descriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+    descriptor.size = UniformCapacity; descriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
     Uniforms = wgpuDeviceCreateBuffer(Device(), &descriptor);
     Shaders = std::make_unique<WebGpuShaderLibrary>(*this);
 }
@@ -24,6 +26,20 @@ WebGpuFrame::~WebGpuFrame() {
 }
 bool WebGpuFrame::Begin(uint32_t width, uint32_t height) {
     if (!width || !height || !Device()) return false;
+    // Grow between submissions so every binding in one frame uses the same arena.
+    if (UniformCursor > UniformCapacity / 2) {
+        WGPULimits limits = WGPU_LIMITS_INIT;
+        if (wgpuDeviceGetLimits(Device(), &limits) != WGPUStatus_Success) throw std::runtime_error("Cannot query WebGPU uniform arena limits");
+        uint64_t maximum = std::min<uint64_t>(limits.maxBufferSize, std::numeric_limits<uint32_t>::max());
+        uint64_t capacity = std::min(UniformCapacity * 2, maximum);
+        if (capacity > UniformCapacity) {
+            WGPUBufferDescriptor descriptor = WGPU_BUFFER_DESCRIPTOR_INIT;
+            descriptor.size = capacity; descriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+            auto replacement = wgpuDeviceCreateBuffer(Device(), &descriptor);
+            if (!replacement) throw std::runtime_error("Cannot grow WebGPU uniform arena");
+            wgpuBufferRelease(Uniforms); Uniforms = replacement; UniformCapacity = capacity; ++UniformGeneration;
+        }
+    }
     if (width != CanvasWidth || height != CanvasHeight) {
         if (!Context.Resize(width, height)) return false;
         if (Depth) wgpuTextureViewRelease(Depth);
@@ -55,8 +71,9 @@ void WebGpuFrame::End() {
 }
 uint32_t WebGpuFrame::Uniform(const void* data, size_t size) {
     uint32_t offset = UniformCursor;
-    UniformCursor += static_cast<uint32_t>((size + 255) & ~size_t(255));
-    if (UniformCursor > 1024 * 1024) throw std::runtime_error("WebGPU frame uniform budget exceeded");
+    uint64_t aligned = (uint64_t(size) + 255) & ~uint64_t(255);
+    if (aligned > UniformCapacity - UniformCursor) throw std::runtime_error("WebGPU frame uniform arena exhausted");
+    UniformCursor += static_cast<uint32_t>(aligned);
     wgpuQueueWriteBuffer(Queue, Uniforms, offset, data, size);
     return offset;
 }

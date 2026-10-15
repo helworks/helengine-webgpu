@@ -17,6 +17,11 @@ void WebGpuShadowRenderer::AllocateAtlas() {
     texture.usage=WGPUTextureUsage_RenderAttachment|WGPUTextureUsage_TextureBinding; Atlas=wgpuDeviceCreateTexture(Frame.Device(),&texture); AtlasView=wgpuTextureCreateView(Atlas,nullptr); ++ResourceGeneration;
 }
 void WebGpuShadowRenderer::RenderCasters(const std::vector<WebGpuShadowCaster>& casters,const WebGpuShadowPlan& plan) {
+    if(UniformGeneration!=Frame.UniformGeneration) {
+        if(DepthProgram) { auto binding=Frame.Shaders->CreateBinding(*DepthProgram,{}); if(DepthBinding) wgpuBindGroupRelease(DepthBinding); DepthBinding=binding; }
+        if(PointDepthProgram) { auto binding=Frame.Shaders->CreateBinding(*PointDepthProgram,{}); if(PointDepthBinding) wgpuBindGroupRelease(PointDepthBinding); PointDepthBinding=binding; }
+        UniformGeneration=Frame.UniformGeneration;
+    }
     CurrentPlan=plan; if(plan.Entries.empty()) return;
     bool hasAtlas=false; for(auto& entry:plan.Entries) if(entry.Light.Type!=1) hasAtlas=true;
     if(hasAtlas) {

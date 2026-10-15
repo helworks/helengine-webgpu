@@ -13,5 +13,6 @@ public:
     WGPUTextureView View = nullptr;
     /// Holds the reusable texture/sampler/uniform binding.
     WGPUBindGroup Binding = nullptr;
+    uint64_t UniformGeneration = 0;
 };
 }

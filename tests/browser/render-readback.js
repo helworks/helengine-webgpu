@@ -25,8 +25,9 @@ async function readback(page) {
         if (pixel(x, y).some((value, index) => Math.abs(value - background[index]) > 10)) uiPixels++;
       }
     }
+    const upperRight = pixel(canvas.width - 5, 5);
     buffer.unmap(); buffer.destroy();
-    return { background, center, uiPixels, width: canvas.width, height: canvas.height };
+    return { background, center, upperRight, uiPixels, width: canvas.width, height: canvas.height };
   });
 }
 module.exports = { readback };

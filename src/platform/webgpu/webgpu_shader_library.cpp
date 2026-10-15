@@ -127,7 +127,11 @@ WGPURenderPipeline WebGpuShaderLibrary::Pipeline(WebGpuShaderProgram& program, b
     WGPURenderPipelineDescriptor descriptor = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT; descriptor.layout=program.PipelineLayout;
     descriptor.vertex.module=program.Vertex; descriptor.vertex.entryPoint={vertexEntry.c_str(),vertexEntry.size()}; descriptor.vertex.bufferCount=1; descriptor.vertex.buffers=&vertices;
     descriptor.fragment=&fragment; if(target.DepthFormat!=WGPUTextureFormat_Undefined) descriptor.depthStencil=&depth;
-    descriptor.primitive.topology=WGPUPrimitiveTopology_TriangleList; descriptor.primitive.frontFace=WGPUFrontFace_CCW; descriptor.primitive.cullMode=ui||state.at("doubleSided").get<bool>()?WGPUCullMode_None:WGPUCullMode_Back;
+    std::string topology=state.contains("primitiveTopology")?state.at("primitiveTopology").get<std::string>():"triangle-list";
+    if(topology=="triangle-list") descriptor.primitive.topology=WGPUPrimitiveTopology_TriangleList;
+    else if(topology=="line-list") descriptor.primitive.topology=WGPUPrimitiveTopology_LineList;
+    else throw std::runtime_error("Unsupported engine primitive topology: "+topology);
+    descriptor.primitive.frontFace=WGPUFrontFace_CCW; descriptor.primitive.cullMode=ui||state.at("doubleSided").get<bool>()?WGPUCullMode_None:WGPUCullMode_Back;
     auto pipeline=wgpuDeviceCreateRenderPipeline(Frame.Device(),&descriptor); program.Pipelines.emplace(key,pipeline); return pipeline;
 }
 WGPUBindGroup WebGpuShaderLibrary::CreateBinding(WebGpuShaderProgram& program, const std::map<std::string,WGPUTextureView>& textures) {

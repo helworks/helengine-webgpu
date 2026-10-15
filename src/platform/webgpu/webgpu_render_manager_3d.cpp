@@ -4,6 +4,8 @@
 #include "webgpu_runtime_material.hpp"
 #include "webgpu_material_bindings.hpp"
 #include "webgpu_shadow_renderer.hpp"
+#include "webgpu_render_target.hpp"
+#include "webgpu_camera_target.hpp"
 #include "AssetSerializer.hpp"
 #include "Core.hpp"
 #include "ObjectManager.hpp"
@@ -52,6 +54,7 @@ void FloatMember(const ArtifactJson& member, const float4& value, std::span<std:
 }
 WebGpuRenderManager3D::WebGpuRenderManager3D(WebGpuFrame& frame) : Frame(frame),Shadows(std::make_unique<WebGpuShadowRenderer>(frame)) {}
 WebGpuRenderManager3D::~WebGpuRenderManager3D() = default;
+RenderTarget* WebGpuRenderManager3D::CreateRenderTarget(int32_t width,int32_t height) {return new WebGpuRenderTarget(Frame,width,height);}
 RuntimeModel* WebGpuRenderManager3D::BuildModelFromRaw(ModelAsset* data) {
     if (!data || !data->Positions || !data->Normals || !data->Positions->Length || data->Positions->Length != data->Normals->Length) throw std::runtime_error("WebGPU mesh requires matching nonempty positions and normals");
     std::unique_ptr<WebGpuRuntimeModel> model(new WebGpuRuntimeModel());
@@ -105,7 +108,7 @@ RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path
         views.emplace(texture.at("name").get<std::string>(),owned->View); material->Textures.push_back(std::move(owned));
     }
     material->TextureViews=views;
-    material->Binding=Frame.Shaders->CreateBinding(*material->Program,views);
+    material->Binding=Frame.Shaders->CreateBinding(*material->Program,views); material->UniformGeneration=Frame.UniformGeneration;
     Frame.Shaders->Pipeline(*material->Program,false,metadata.at("renderState"));
     return material.release();
 }
@@ -118,9 +121,9 @@ void WebGpuRenderManager3D::Draw() {
     for (int32_t i = 0; i < cameras->Count(); ++i) {
         ICamera* camera = (*cameras)[i];
         if (!camera->get_Parent()->get_IsHierarchyEnabled() || !IsCameraVisibleInWindow(camera, get_RenderWindowHandle())) continue;
-        if (camera->get_RenderTarget()) throw std::runtime_error("Offscreen camera targets are unsupported in the initial WebGPU renderer");
+        auto output=ResolveCameraTarget(Frame,camera);ActiveTarget=output.Pipeline;
         auto viewport = camera->get_Viewport();
-        float width = viewport.Z * Frame.Width(), height = viewport.W * Frame.Height();
+        float width = viewport.Z * output.Width, height = viewport.W * output.Height;
         if (width <= 0 || height <= 0) continue;
         float3 position = camera->get_Parent()->get_Position();
         CameraPosition = float4(position.X,position.Y,position.Z,1);
@@ -139,13 +142,13 @@ void WebGpuRenderManager3D::Draw() {
         auto settings = camera->get_ClearSettings();
         auto clear = settings.get_ClearColor();
         WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
-        color.view = Frame.Color; color.loadOp = settings.get_ClearColorEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; color.storeOp = WGPUStoreOp_Store;
+        color.view = output.Color; color.loadOp = settings.get_ClearColorEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; color.storeOp = WGPUStoreOp_Store;
         color.clearValue = {clear.X, clear.Y, clear.Z, clear.W};
         WGPURenderPassDepthStencilAttachment depth = WGPU_RENDER_PASS_DEPTH_STENCIL_ATTACHMENT_INIT;
-        depth.view = Frame.Depth; depth.depthLoadOp = settings.get_ClearDepthEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; depth.depthStoreOp = WGPUStoreOp_Store; depth.depthClearValue = settings.get_ClearDepth();
-        WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color; descriptor.depthStencilAttachment = &depth;
+        depth.view = output.Depth; depth.depthLoadOp = settings.get_ClearDepthEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; depth.depthStoreOp = WGPUStoreOp_Store; depth.depthClearValue = settings.get_ClearDepth();
+        WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color; descriptor.depthStencilAttachment = output.Depth?&depth:nullptr;
         Pass = wgpuCommandEncoderBeginRenderPass(Frame.Encoder, &descriptor);
-        wgpuRenderPassEncoderSetViewport(Pass, viewport.X * Frame.Width(), viewport.Y * Frame.Height(), width, height, 0, 1);
+        wgpuRenderPassEncoderSetViewport(Pass, viewport.X * output.Width, viewport.Y * output.Height, width, height, 0, 1);
         auto* queue=camera->get_RenderQueue3D();
         if(auto* list=dynamic_cast<RenderList3D*>(queue)) list->VisitCameraOrdered(this, camera);
         else queue->VisitOrdered(this);
@@ -168,11 +171,15 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
     for (int32_t i = 0; i < count; ++i) {
         if (!materials || i >= materials->Length || !(*materials)[i]) throw std::runtime_error("Mesh submesh has no cooked material");
         auto* material = static_cast<WebGpuRuntimeMaterial*>((*materials)[i]->ResolveRootMaterial());
-        if(material->ShadowResourceGeneration!=Shadows->ResourceGeneration) {
+        if(material->ShadowResourceGeneration!=Shadows->ResourceGeneration || material->UniformGeneration!=Frame.UniformGeneration) {
             auto views=material->TextureViews; for(auto& pair:Shadows->TextureBindings()) views.insert_or_assign(pair.first,pair.second);
-            auto binding=Frame.Shaders->CreateBinding(*material->Program,views); if(material->Binding) wgpuBindGroupRelease(material->Binding); material->Binding=binding; material->ShadowResourceGeneration=Shadows->ResourceGeneration;
+            auto binding=Frame.Shaders->CreateBinding(*material->Program,views); if(material->Binding) wgpuBindGroupRelease(material->Binding); material->Binding=binding; material->ShadowResourceGeneration=Shadows->ResourceGeneration; material->UniformGeneration=Frame.UniformGeneration;
         }
-        auto& program=*material->Program; auto constants=material->Artifact.Constants; auto& state=material->Artifact.Metadata.at("renderState");
+        auto& program=*material->Program; auto constants=material->Artifact.Constants; auto state=material->Artifact.Metadata.at("renderState");
+        auto topology=ranges && ranges->Length?(*ranges)[i]->PrimitiveTopology:ModelPrimitiveTopology::TriangleList;
+        if(topology==ModelPrimitiveTopology::TriangleList) state["primitiveTopology"]="triangle-list";
+        else if(topology==ModelPrimitiveTopology::LineList) state["primitiveTopology"]="line-list";
+        else throw std::runtime_error("Submesh uses an unknown engine primitive topology");
         for (auto& binding:program.Artifact.Metadata.at("bindings")) {
             if(binding.at("class")!="constant-buffer") continue;
             std::string name=binding.at("name");
@@ -203,7 +210,7 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
                 }
             }
         }
-        wgpuRenderPassEncoderSetPipeline(Pass,Frame.Shaders->Pipeline(program,false,state));
+        wgpuRenderPassEncoderSetPipeline(Pass,Frame.Shaders->Pipeline(program,false,state,ActiveTarget));
         Frame.Shaders->Bind(Pass,program,material->Binding,constants);
         uint32_t start = ranges && ranges->Length ? (*ranges)[i]->IndexStart : 0;
         uint32_t indices = ranges && ranges->Length ? (*ranges)[i]->IndexCount : model->IndexCount;

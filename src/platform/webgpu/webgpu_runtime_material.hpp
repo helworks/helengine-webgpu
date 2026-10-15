@@ -16,5 +16,6 @@ public:
     WGPUBindGroup Binding = nullptr;
     std::map<std::string,WGPUTextureView> TextureViews;
     uint64_t ShadowResourceGeneration = 0;
+    uint64_t UniformGeneration = 0;
 };
 }

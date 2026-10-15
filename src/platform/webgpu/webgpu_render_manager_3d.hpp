@@ -6,6 +6,7 @@
 #include "float4.hpp"
 #include "webgpu_light_state.hpp"
 #include "webgpu_shadow_plan.hpp"
+#include "webgpu_pipeline_target.hpp"
 
 namespace helengine::webgpu {
 class WebGpuRenderManager2D;
@@ -21,6 +22,8 @@ public:
     RuntimeModel* BuildModelFromRaw(ModelAsset* data) override;
     /// Deserializes a prepared engine model and uploads it.
     RuntimeModel* BuildModelFromCooked(std::string path, IContentStreamSource* source) override;
+    /// Creates a normal engine render target whose output later cameras and sprites can sample.
+    RenderTarget* CreateRenderTarget(int32_t width,int32_t height) override;
     /// Validates and loads the platform-owned basic material payload.
     RuntimeMaterial* BuildMaterialFromCooked(PlatformMaterialAsset* data) override;
     /// Reads and validates one prepared material from the content source.
@@ -46,5 +49,6 @@ private:
     ArtifactJson ForwardValues;
     ArtifactJson ShadowValues;
     std::unique_ptr<WebGpuShadowRenderer> Shadows;
+    WebGpuPipelineTarget ActiveTarget;
 };
 }

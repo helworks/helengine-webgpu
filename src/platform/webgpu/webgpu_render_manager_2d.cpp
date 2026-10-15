@@ -1,6 +1,8 @@
 #include "webgpu_render_manager_2d.hpp"
 #include "webgpu_runtime_texture.hpp"
 #include "webgpu_material_bindings.hpp"
+#include "webgpu_render_target.hpp"
+#include "webgpu_camera_target.hpp"
 #include "TextureAsset.hpp"
 #include "AssetSerializer.hpp"
 #include "IContentStreamSource.hpp"
@@ -23,7 +25,7 @@ WebGpuRenderManager2D::WebGpuRenderManager2D(WebGpuFrame& frame) : Frame(frame),
     selection["variant"] = "RoundedShape"; RoundedProgram = Frame.Shaders->Load(ShaderArtifactPath(selection));
     ArtifactJson state = {{"alphaMode","alpha-blend"},{"doubleSided",true},{"useVertexColor",true},{"lit",false},{"depthTest",false},{"depthWrite",false}};
     Textured = Frame.Shaders->Pipeline(*TexturedProgram,true,state); Rounded = Frame.Shaders->Pipeline(*RoundedProgram,true,state);
-    RoundedBinding = Frame.Shaders->CreateBinding(*RoundedProgram,{});
+    RoundedBinding = Frame.Shaders->CreateBinding(*RoundedProgram,{}); UniformGeneration=Frame.UniformGeneration;
     Vertices = Frame.Buffer(nullptr, 4 * 1024 * 1024, WGPUBufferUsage_Vertex); Indices = Frame.Buffer(nullptr, 1024 * 1024, WGPUBufferUsage_Index);
     TextureAsset white; white.Width = 1; white.Height = 1; white.ColorFormat = TextureAssetColorFormat::Rgba32; white.Colors = new Array<uint8_t>(4);
     for (int i = 0; i < 4; ++i) (*white.Colors)[i] = 255;
@@ -45,7 +47,7 @@ RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromRaw(TextureAsset* data) {
     WGPUTexelCopyBufferLayout bytes = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT; bytes.bytesPerRow = data->Width * 4; bytes.rowsPerImage = data->Height;
     WGPUExtent3D extent {data->Width, data->Height, 1};
     wgpuQueueWriteTexture(Frame.Queue, &destination, data->Colors->Data, data->Colors->Length, &bytes, &extent);
-    texture->Binding = Frame.Shaders->CreateBinding(*TexturedProgram,{{"BatchTexture",texture->View}});
+    texture->Binding = Frame.Shaders->CreateBinding(*TexturedProgram,{{"BatchTexture",texture->View}}); texture->UniformGeneration=Frame.UniformGeneration;
     return texture.release();
 }
 RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromCooked(std::string path, IContentStreamSource* source) {
@@ -54,15 +56,23 @@ RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromCooked(std::string path, 
     return BuildTextureFromRaw(texture);
 }
 void WebGpuRenderManager2D::UpdateTextureRegionCore(RuntimeTexture* runtime, int32_t x, int32_t y, int32_t width, int32_t height, Array<uint8_t>* rgba8, int32_t sourceRowPitch) {
-    auto* texture = static_cast<WebGpuRuntimeTexture*>(runtime);
+    auto* texture = dynamic_cast<WebGpuRuntimeTexture*>(runtime);
+    auto* target = dynamic_cast<WebGpuRenderTarget*>(runtime);
+    if(!texture && !target) throw std::runtime_error("Texture update requires a WebGPU runtime texture or target");
     WGPUTexelCopyTextureInfo destination = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
-    destination.texture = texture->Texture; destination.origin = {static_cast<uint32_t>(x), static_cast<uint32_t>(y), 0};
+    destination.texture = texture?texture->Texture:target->Texture; destination.origin = {static_cast<uint32_t>(x), static_cast<uint32_t>(y), 0};
     WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
     layout.bytesPerRow = sourceRowPitch; layout.rowsPerImage = height;
     WGPUExtent3D extent {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
     wgpuQueueWriteTexture(Frame.Queue, &destination, rgba8->Data, rgba8->Length, &layout, &extent);
 }
-void WebGpuRenderManager2D::BeginFrame() { VertexCursor = 0; IndexCursor = 0; }
+void WebGpuRenderManager2D::BeginFrame() {
+    VertexCursor = 0; IndexCursor = 0;
+    if(UniformGeneration!=Frame.UniformGeneration) {
+        auto binding=Frame.Shaders->CreateBinding(*RoundedProgram,{});
+        wgpuBindGroupRelease(RoundedBinding); RoundedBinding=binding; UniformGeneration=Frame.UniformGeneration;
+    }
+}
 void WebGpuRenderManager2D::SetCamera(float4x4 projection, float4 viewport) { Projection = projection; Viewport = viewport; }
 Batch2DRun WebGpuRenderManager2D::Run(Batch2DVariant variant, RuntimeTexture* texture) {
     auto clip = Clips.empty() ? Viewport : Clips.back();
@@ -78,14 +88,35 @@ void WebGpuRenderManager2D::Submit(Batch2DBuffer* buffer, Batch2DRun run) {
     if (VertexCursor + vertexBytes > 4 * 1024 * 1024 || IndexCursor + indexBytes > 1024 * 1024) throw std::runtime_error("WebGPU UI frame upload budget exceeded");
     wgpuQueueWriteBuffer(Frame.Queue, Vertices, VertexCursor, buffer->Vertices->Data, vertexBytes);
     wgpuQueueWriteBuffer(Frame.Queue, Indices, IndexCursor, buffer->Indices->Data, indexBytes);
-    auto* texture = run.get_Variant() == Batch2DVariant::RoundedShape ? White.get() : static_cast<WebGpuRuntimeTexture*>(run.get_Texture());
+    RuntimeTexture* texture = run.get_Variant() == Batch2DVariant::RoundedShape ? White.get() : run.get_Texture();
     if (!texture || texture->get_IsDisposed()) throw std::runtime_error("UI batch references a missing or disposed texture");
     auto& program = run.get_Variant() == Batch2DVariant::RoundedShape ? *RoundedProgram : *TexturedProgram;
     auto& reflected = program.Artifact.Metadata.at("bindings").at(0);
     std::vector<std::byte> camera(reflected.at("sourceLayout").at("size").get<size_t>());
     WriteEngineMatrix(reflected.at("sourceLayout").at("members").at(0),reinterpret_cast<const float*>(&Projection),camera);
-    wgpuRenderPassEncoderSetPipeline(Pass, run.get_Variant() == Batch2DVariant::RoundedShape ? Rounded : Textured);
-    Frame.Shaders->Bind(Pass,program,run.get_Variant() == Batch2DVariant::RoundedShape ? RoundedBinding : texture->Binding,{{"BatchCameraBuffer",std::move(camera)}});
+    WGPUBindGroup binding=RoundedBinding;
+    if(run.get_Variant()!=Batch2DVariant::RoundedShape) {
+        if(auto* ordinary=dynamic_cast<WebGpuRuntimeTexture*>(texture)) {
+            if(ordinary->UniformGeneration!=Frame.UniformGeneration) {
+                auto replacement=Frame.Shaders->CreateBinding(program,{{"BatchTexture",ordinary->View}});
+                if(ordinary->Binding) wgpuBindGroupRelease(ordinary->Binding);
+                ordinary->Binding=replacement; ordinary->UniformGeneration=Frame.UniformGeneration;
+            }
+            binding=ordinary->Binding;
+        }
+        else if(auto* target=dynamic_cast<WebGpuRenderTarget*>(texture)) {
+            if(!target->get_CanSampleAsTexture() || !target->View) throw std::runtime_error("UI batch references an unsampleable camera target");
+            if(!target->Binding || target->UniformGeneration!=Frame.UniformGeneration) {
+                auto replacement=Frame.Shaders->CreateBinding(program,{{"BatchTexture",target->View}});
+                if(target->Binding) wgpuBindGroupRelease(target->Binding);
+                target->Binding=replacement; target->UniformGeneration=Frame.UniformGeneration;
+            }
+            binding=target->Binding;
+        } else throw std::runtime_error("UI batch requires a WebGPU runtime texture or target");
+    }
+    auto state=ArtifactJson({{"alphaMode","alpha-blend"},{"doubleSided",true},{"depthTest",false},{"depthWrite",false},{"useVertexColor",true},{"lit",false}});
+    wgpuRenderPassEncoderSetPipeline(Pass,Frame.Shaders->Pipeline(program,true,state,ActiveTarget));
+    Frame.Shaders->Bind(Pass,program,binding,{{"BatchCameraBuffer",std::move(camera)}});
     wgpuRenderPassEncoderSetVertexBuffer(Pass, 0, Vertices, VertexCursor, vertexBytes);
     wgpuRenderPassEncoderSetIndexBuffer(Pass, Indices, WGPUIndexFormat_Uint16, IndexCursor, indexBytes);
     wgpuRenderPassEncoderSetScissorRect(Pass, run.get_ScissorX(), run.get_ScissorY(), run.get_ScissorWidth(), run.get_ScissorHeight());
@@ -94,11 +125,12 @@ void WebGpuRenderManager2D::Submit(Batch2DBuffer* buffer, Batch2DRun run) {
 }
 void WebGpuRenderManager2D::RenderCamera(ICamera* camera) {
     auto viewport = camera->get_Viewport();
-    Viewport = float4(viewport.X * Frame.Width(), viewport.Y * Frame.Height(), viewport.Z * Frame.Width(), viewport.W * Frame.Height());
+    auto output=ResolveCameraTarget(Frame,camera);ActiveTarget=output.Pipeline;ActiveTarget.DepthFormat=WGPUTextureFormat_Undefined;
+    Viewport = float4(viewport.X * output.Width, viewport.Y * output.Height, viewport.Z * output.Width, viewport.W * output.Height);
     auto* commands = Commands->Build(camera->get_RenderQueue2D());
     if (!commands || !commands->get_Count()) return;
     WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
-    color.view = Frame.Color; color.loadOp = WGPULoadOp_Load; color.storeOp = WGPUStoreOp_Store;
+    color.view = output.Color; color.loadOp = WGPULoadOp_Load; color.storeOp = WGPUStoreOp_Store;
     WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color;
     Pass = wgpuCommandEncoderBeginRenderPass(Frame.Encoder, &descriptor);
     wgpuRenderPassEncoderSetViewport(Pass, Viewport.X, Viewport.Y, Viewport.Z, Viewport.W, 0, 1);
