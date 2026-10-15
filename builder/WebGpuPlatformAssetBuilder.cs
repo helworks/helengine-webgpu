@@ -5,15 +5,27 @@ using helengine.baseplatform.Profiles;
 using helengine.baseplatform.Requests;
 using helengine.baseplatform.Results;
 using helengine.baseplatform.Reporting;
+using helengine;
 
 namespace helengine.webgpu.builder;
 
 /// <summary>Exposes the WebGPU plugin through the existing editor/CLI platform build contract.</summary>
-public sealed class WebGpuPlatformAssetBuilder : IPlatformAssetBuilder {
+public sealed class WebGpuPlatformAssetBuilder : IPlatformAssetBuilder, IPlatformShaderArtifactBuilder, IPlatformRendererShaderDependencyProvider, IShaderBackendRegistryContributor {
     /// <summary>Identifies supported engine/manifest ranges and build profiles.</summary>
     public PlatformBuilderDescriptor Descriptor { get; } = new("helengine.webgpu.builder", "1.0.0", "webgpu", new EngineCompatibilityRange("1.0.0", "999.0.0"), new ManifestCompatibilityRange(1, 1), ["webgpu"], ["debug", "release"]);
     /// <summary>Describes browser build and cooking capabilities.</summary>
     public PlatformDefinition Definition { get; } = WebGpuPlatformDefinitionFactory.Create();
+    /// <summary>Declares both shared UI variants independently of authored 3D materials.</summary>
+    public IReadOnlyList<PlatformShaderDependency> RendererShaderDependencies { get; } = [
+        new("SpriteBatchShader", "SpriteBatchShader.vs", "SpriteBatchShader.ps", "Textured"),
+        new("SpriteBatchShader", "SpriteBatchShader.vs", "SpriteBatchShader.ps", "RoundedShape")];
+    /// <summary>Registers lazy native compilation without requiring WebGPU tools for other editor platforms.</summary>
+    public void RegisterShaderBackends(ShaderBackendRegistry shaderBackendRegistry) {
+        ArgumentNullException.ThrowIfNull(shaderBackendRegistry);
+        shaderBackendRegistry.Register(new WebGpuLazyShaderBackend());
+    }
+    /// <summary>Compiles and declares every explicit material or renderer shader selection.</summary>
+    public PlatformShaderArtifactCookResult CookShaderArtifacts(PlatformShaderArtifactCookRequest request) => new WebGpuShaderArtifactCooker().Cook(request);
     /// <summary>Translates the authored schema into the engine's existing material serialization.</summary>
     public PlatformMaterialCookResult CookMaterial(PlatformMaterialCookRequest request) { return new WebGpuMaterialCooker().Cook(request); }
     /// <summary>Runs content staging and native compilation for a resolved project request.</summary>
