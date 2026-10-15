@@ -1,6 +1,6 @@
 # WebGPU cooked artifact schema v1
 
-Implementation status: the managed shader writer/reader and cooker exist. Native readers and GPU renderer migration are not implemented yet. ForwardStandard fragment compilation is awaiting Helena's decision about explicit shadow-map LOD; do not treat this document as full DemoDisc acceptance.
+Implementation status: managed/native readers, cookers and GPU consumption in both renderers are implemented. Helena approved explicit LOD 0 for the shared shadow-map samples, and all five original variants compile. Cube/UI acceptance establishes this shader foundation; full DemoDisc acceptance remains pending.
 
 ## WGSP envelope
 
@@ -50,11 +50,13 @@ A binding contains `name`, `class`, `registerIndex`, `registerSpace`, `group`, `
 
 Texture/sample/sampler values currently use the enum values from pinned Tint revision `31e25af254ab572c77054edec4946d2244e184dd`. They must not be interpreted using a different Tint revision's enum table. A future incompatible layout/schema requires a format version change.
 
+Uniform structures require nonempty member arrays at every structural node. The native packer understands the pinned Tint lowering's `tint_padded_array_element` wrappers, copies the scalar/vector value into their physical member extent, and leaves padding zeroed. This covers one-dimensional float, float2, float3 and float4 arrays without rewriting WGSL.
+
 ## Selection and publication
 
 Paths are `shaders/<sha256>.wgsp`. The digest input is the asset ID, vertex-program name, pixel-program name and variant, each framed by its UTF-8 byte length as little-endian uint32. Authored identifiers never become filenames directly.
 
-Built-ins use the shared StandardShaderVariants and SpriteBatchShaderVariants catalogs. Custom HLSL follows the current shared ShaderPackageBuilder convention: source-file-name `.vs`/`.ps` logical programs, VS/PS entry points and default variant. Other selections fail explicitly; no arbitrary missing entry-point inference is allowed.
+Built-ins use the shared StandardShaderVariants and SpriteBatchShaderVariants catalogs. Custom HLSL uses source-file-name `.vs`/`.ps` logical programs and VS/PS entry points. Both the shared ShaderPackageBuilder `default` variant and the editor cooker's `Mesh` selection are accepted with their original identities. Other selections fail explicitly; no arbitrary missing entry-point inference is allowed.
 
 All requested pairs are compiled and serialized before publication begins. Each output is written to a unique sibling temporary file and atomically renamed only after preparation succeeds. No declaration is returned for a failed cook. Native inputs and diagnostics live outside the scanned cooked-content tree.
 

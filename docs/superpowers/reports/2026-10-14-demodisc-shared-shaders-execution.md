@@ -43,7 +43,7 @@ WebGPU scene selection is still Cube-only. The objective remains 37 desktop scen
 
 The actual gallery has Windows overrides and no WebGPU overrides; a common-only WebGPU probe demonstrated default-value loss. Desktop authored settings must be migrated during full project integration. The preservation evidence uses actual Windows-authored inputs and does not claim current WebGPU inheritance already selects them.
 
-Uniform packing supports one-dimensional arrays, nested structs and matrices. Multidimensional arrays require per-dimension source strides and fail explicitly. The renderer advertises one directional light, without shadow passes; compiling variants does not establish full renderer parity. Vertex-color materials require a mesh color stream and currently fail explicitly. Custom selections follow the existing file-name VS/PS/default program contract and supported resource/stream limits.
+Uniform packing supports one-dimensional arrays, nested structs and matrices. Multidimensional arrays require per-dimension source strides and fail explicitly. The renderer advertises one directional light, without shadow passes; compiling variants does not establish full renderer parity. Vertex-color materials require a mesh color stream and currently fail explicitly. Custom selections preserve the existing file-name VS/PS/default contract and the actual editor Mesh alias and supported resource/stream limits.
 
 ## Execution rulings
 
@@ -54,3 +54,29 @@ Uniform packing supports one-dimensional arrays, nested structs and matrices. Mu
 5. Preserve existing .hasset material package paths and extensionless imported texture paths, identified by WGPM magic. Cost if wrong: change shared path policy and scene references together.
 
 Unrelated engine edits were preserved. No screenshots, videos or browser traces were captured.
+
+
+## Final independent review and correction pass (2026-10-15)
+
+The review covered backend range 435a794..3fa5182 and engine commits 19ba3506/c02333c9. No Critical findings. Four Important findings were reproduced and corrected in one pass; the stale schema status was regraded Important because it contradicted the delivered runtime and incorrectly said Helena's source decision was still pending.
+
+- Custom editor Mesh: failing cooker regression, then alias preserved; the browser custom fixture now uses Mesh rather than bypassing the editor convention.
+- Tint padding: the fixture now uses float, float2 and float4 arrays. GPU regression failed before the packer understood the actual structured padding wrappers; exact expected pixels pass after the fix.
+- Null/invalid member containers: managed and native regressions failed first; both reader boundaries now reject null, non-array and empty structural members.
+- RuntimeMaterial state: an isolated instrumented real-player regression observed Opaque/Back/depth=true when WGPM requested AlphaBlend/None/depth=false. The loader now applies the engine-owned state through SetRenderState. The actual RenderList3D path uses VisitCameraOrdered, with the existing two core transparency tests passing and a native bridge contract assertion. The final browser state test observes the correct base material values.
+- Schema status: a failing documentation contract assertion preceded correcting its implementation/approval claims.
+
+Final evidence root is C:\dev\helworks\builds\helengine-webgpu\shared-shaders:
+
+| Check | Actual result | Log |
+| --- | --- | --- |
+| Complete builder suite | 77/77 | review-suite.log |
+| Native reader/packing harness | 8 valid pairs and corruption/packing checks | review-native-green.log |
+| Padded scalar/vector arrays + Mesh, real GPU | Exact RGBA [32,64,96,255] | review-array-browser-green.log |
+| Existing shared transparency tests | 2/2 | review-transparency-core.log |
+| Official release export + Build Waiter | succeeded, exit 0, all four fresh files | export-reviewed.log |
+| Complete browser suite on that official export | 31/31, NVIDIA Lovelace, fallback false | browser-reviewed.log |
+
+RED logs: review-managed-red.log, review-native-red.log, review-array-state-browser-red.log, review-state-browser-red.log, review-state-contract-red.log, review-doc-status-red.log. No second review was dispatched; covering regressions and complete reruns verified the fixes.
+
+The review's excluded future behavior matches the approved stage boundaries listed above. Existing material/texture path conventions and unrelated dirty files remain outside this change. Publication is atomic per WGSP after all compilation preparation, rather than a global multi-file rename transaction. Cost if that boundary proves insufficient: add a staging-root transaction for IO failures during a batch of renames; a failed build still does not publish an accepted new player. No deferred Minor findings remain.

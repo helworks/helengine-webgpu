@@ -98,9 +98,28 @@ public static class WebGpuShaderArtifactSerializer {
                     || stages.EnumerateArray().Select(value => value.GetString()).Distinct().Count() != stages.GetArrayLength()) { throw new InvalidDataException("WGSP stage visibility is invalid."); }
                 WebGpuArtifactJson.Container(binding, "layout", JsonValueKind.Object);
                 WebGpuArtifactJson.Container(binding, "sourceLayout", JsonValueKind.Object);
+                if (resourceClass == "constant-buffer") {
+                    ValidateMemberContainers(binding.GetProperty("layout"), true, 0);
+                    ValidateMemberContainers(binding.GetProperty("sourceLayout"), true, 0);
+                }
             }
         } catch (Exception error) when (error is KeyNotFoundException || error is InvalidOperationException || error is FormatException || error is EncoderFallbackException) {
             throw new InvalidDataException("WGSP metadata does not match its v1 schema.", error);
+        }
+    }
+
+    /// <summary>Rejects absent, null or empty structural member lists recursively before publishing or accepting uniforms.</summary>
+    static void ValidateMemberContainers(JsonElement layout, bool requireMembers, int depth) {
+        if (depth > 24 || layout.ValueKind != JsonValueKind.Object) { throw new InvalidDataException("WGSP uniform layout nesting/type is invalid."); }
+        if (requireMembers || layout.TryGetProperty("members", out _)) {
+            JsonElement members = WebGpuArtifactJson.Container(layout, "members", JsonValueKind.Array);
+            if (members.GetArrayLength() == 0) { throw new InvalidDataException("WGSP uniform structure must contain members."); }
+            foreach (JsonElement member in members.EnumerateArray()) { ValidateMemberContainers(member, false, depth + 1); }
+        }
+        if (layout.TryGetProperty("element", out JsonElement element)) { ValidateMemberContainers(element, false, depth + 1); }
+        if (layout.TryGetProperty("aggregate", out JsonElement aggregate)) {
+            JsonElement structure = WebGpuArtifactJson.Container(aggregate, "structure", JsonValueKind.Object);
+            if (structure.EnumerateObject().Any()) { ValidateMemberContainers(structure, true, depth + 1); }
         }
     }
 }

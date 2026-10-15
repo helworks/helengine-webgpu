@@ -79,7 +79,7 @@ public sealed class WebGpuShaderArtifactCooker {
         else {
             // ShaderPackageBuilder defines custom source packages with file-name programs, VS/PS entries and default variant.
             programPrefix = Path.GetFileNameWithoutExtension(source.SourcePath);
-            variants = [new StandardShaderVariant("default", "VS", "PS", [])];
+            variants = [new StandardShaderVariant("default", "VS", "PS", []), new StandardShaderVariant("Mesh", "VS", "PS", [])];
         }
         StandardShaderVariant variant = variants.SingleOrDefault(value => value.Name == dependency.VariantName);
         if (variant == null || dependency.VertexProgramName != programPrefix + ".vs" || dependency.PixelProgramName != programPrefix + ".ps") {

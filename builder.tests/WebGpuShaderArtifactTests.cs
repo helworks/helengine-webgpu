@@ -8,6 +8,21 @@ namespace helengine.webgpu.builder.tests;
 
 /// <summary>Verifies deterministic WGSP bytes and rejects malformed or inconsistent envelope metadata.</summary>
 public sealed class WebGpuShaderArtifactTests {
+    /// <summary>Invalid reflected member containers cannot be published or accepted merely because their WGSL hashes match.</summary>
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("[]")]
+    public void Buffer_member_containers_must_be_nonempty_arrays(string invalid) {
+        string source = "cbuffer Settings:register(b0) { float4 color; }; float4 VS(float3 p:POSITION):SV_POSITION { return float4(p,1); } float4 PS():SV_TARGET { return color; }";
+        var pair = WebGpuShaderProgramPair.Link(WebGpuShaderBackendTests.Compile(source, ShaderStage.Vertex), WebGpuShaderBackendTests.Compile(source, ShaderStage.Pixel));
+        var artifact = WebGpuShaderArtifact.FromPair("fixture", pair);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(artifact.Metadata.GetRawText());
+        node["bindings"][0]["layout"]["members"] = System.Text.Json.Nodes.JsonNode.Parse(invalid);
+        byte[] bytes = WebGpuShaderArtifactSerializer.Serialize(artifact);
+        Assert.Throws<InvalidDataException>(() => WebGpuShaderArtifactSerializer.Deserialize(Repack(bytes, node.ToJsonString())));
+        Assert.Throws<InvalidDataException>(() => WebGpuShaderArtifactSerializer.Serialize(new WebGpuShaderArtifact(System.Text.Json.JsonSerializer.SerializeToElement(node), artifact.VertexWgsl, artifact.FragmentWgsl)));
+    }
     /// <summary>Header offsets, UTF-8 sections and deterministic serialization form the native reader contract.</summary>
     [Fact]
     public void Serialize_round_trips_the_exact_versioned_header() {

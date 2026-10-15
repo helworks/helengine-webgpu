@@ -42,6 +42,9 @@ int main(int argc, char** argv) {
                 for(auto& b:changed.at("bindings")) if(b.at("binding")==slot) b.at("layout").at("members").at(0)["offset"]=65536;
                 Reject([&] { ReadShaderArtifact(Repack(shader,changed)); });
                 changed=shader.Metadata;
+                for(auto& b:changed.at("bindings")) if(b.at("binding")==slot) b.at("layout")["members"]=nullptr;
+                Reject([&] { ReadShaderArtifact(Repack(shader,changed)); });
+                changed=shader.Metadata;
                 for(auto& b:changed.at("bindings")) if(b.at("binding")==slot) b.at("layout").at("members").at(0)["alignment"]=0;
                 Reject([&] { ReadShaderArtifact(Repack(shader,changed)); });
             }

@@ -89,6 +89,18 @@ public sealed class WebGpuShaderArtifactCookerTests : IDisposable {
         Assert.Equal(variant, declaration.VariantId);
     }
 
+    /// <summary>Custom requests use Mesh in the real editor while direct shared shader packages also expose default.</summary>
+    [Theory]
+    [InlineData("default")]
+    [InlineData("Mesh")]
+    public void Cook_accepts_custom_editor_program_selection(string variant) {
+        string path = Path.Combine(Root, "custom.hlsl");
+        string source = "float4 VS(float3 p:POSITION):SV_POSITION { return float4(p,1); } float4 PS():SV_TARGET { return float4(1,0,0,1); }";
+        var request = Request([new PlatformShaderDependency("custom", "custom.vs", "custom.ps", variant)], "custom", path, source);
+        var declaration = Assert.Single(new WebGpuShaderArtifactCooker().Cook(request).CookedArtifactDeclarations);
+        Assert.Equal(variant, declaration.VariantId);
+    }
+
     /// <summary>Changing an active include invalidates the cooked shader content without changing its logical path.</summary>
     [Fact]
     public void Cook_recompiles_after_include_change_and_preserves_last_valid_output_on_failure() {

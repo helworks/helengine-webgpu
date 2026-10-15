@@ -114,6 +114,7 @@ void ValidateFinalLayout(const ArtifactJson& layout, size_t available, unsigned 
     size_t size = layout.at("size").get<size_t>(), alignment = layout.at("alignment").get<size_t>();
     Check(size > 0 && size <= available && alignment > 0 && alignment <= 65536 && (alignment & (alignment-1)) == 0, "Final uniform size/alignment is invalid"); Text(layout,"type");
     if (layout.contains("members")) {
+        Check(layout.at("members").is_array() && !layout.at("members").empty(), "Final uniform members must be a nonempty array");
         std::set<std::string> names; size_t previousEnd = 0;
         for (auto& member : layout.at("members")) {
             Check(names.insert(Text(member,"name")).second, "Final uniform member is duplicated");
@@ -153,6 +154,7 @@ WebGpuShaderArtifact ReadShaderArtifact(std::span<const std::byte> bytes) {
         for (auto& stage : b.at("stages")) { auto s = stage.get<std::string>(); Check((s == "vertex" || s == "fragment") && stages.insert(s).second, "WGSP visibility stage is invalid"); }
         if (resource == "constant-buffer") {
             size_t size = b.at("size").get<size_t>(); Check(size && size <= 65536, "WGSP uniform exceeds device limits");
+            Check(b.at("layout").at("members").is_array() && !b.at("layout").at("members").empty(), "WGSP uniform structure has invalid members");
             ValidateFinalLayout(b.at("layout"),size); SourceLayout(b.at("sourceLayout"),b.at("sourceLayout").at("size").get<size_t>(),0);
             Check(b.at("sourceLayout").at("size").get<size_t>() <= 65536, "WGSP original uniform exceeds limits");
         } else if (resource == "texture") Check((b.at("textureDimension") == 1 || b.at("textureDimension") == 4) && b.at("sampleType") == 5, "WGSP texture type is unsupported");

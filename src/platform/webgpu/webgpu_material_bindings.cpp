@@ -17,6 +17,12 @@ void Member(const ArtifactJson& source, const ArtifactJson& target, std::span<co
         size_t targetStride = target.at("arrayStride").get<size_t>();
         for (size_t i=0;i<count;++i) Member(source,target.at("element"),input.subspan(i*sourceStride,sourceStride),output.subspan(i*targetStride,targetStride),true);
     } else if (!aggregate.at("structure").empty()) Structure(aggregate.at("structure"),target,input,output);
+    else if (element && target.contains("members")) {
+        // Tint's structured strided-array lowering wraps padded scalar/vector elements.
+        const auto& members=target.at("members");
+        if (!target.at("type").get<std::string>().starts_with("tint_padded_array_element") || !members.is_array() || members.size()!=1 || members.at(0).at("offset")!=0) throw std::runtime_error("Unsupported lowered uniform array wrapper");
+        Member(source,members.at(0),input,output,true);
+    }
     else if (aggregate.at("columns").get<unsigned>() > 1) {
         size_t rows = aggregate.at("rows").get<size_t>(), columns = aggregate.at("columns").get<size_t>();
         if (rows != target.at("rows") || columns != target.at("columns")) throw std::runtime_error("Uniform matrix shape differs after lowering");
@@ -26,7 +32,9 @@ void Member(const ArtifactJson& source, const ArtifactJson& target, std::span<co
         auto type = source.at("type").get<std::string>();
         if (type.find(":32:") == std::string::npos) throw std::runtime_error("Uniform scalar width is unsupported");
         size_t size = aggregate.at("rows").get<size_t>()*4;
-        if (target.at("size").get<size_t>() != size) throw std::runtime_error("Uniform scalar/vector shape differs after lowering");
+        std::string scalar=type.starts_with("FP32:")?"f32":type.starts_with("Int32:")?"i32":type.starts_with("UInt32:")?"u32":"";
+        std::string expected=size==4?scalar:"vec"+std::to_string(size/4)+"<"+scalar+">";
+        if (scalar.empty() || target.at("type")!=expected || target.at("size").get<size_t>() < size) throw std::runtime_error("Uniform scalar/vector shape differs after lowering");
         Copy(input,0,output,0,size);
     }
 }

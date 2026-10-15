@@ -14,6 +14,11 @@
 #include "DirectionalLightComponent.hpp"
 #include "RendererBackendCapabilityProfile.hpp"
 #include "PlatformMaterialAsset.hpp"
+#include "MaterialRenderState.hpp"
+#include "MaterialBlendMode.hpp"
+#include "MaterialCullMode.hpp"
+#include "RenderList3D.hpp"
+#include <emscripten.h>
 #include "ModelAsset.hpp"
 #include "ModelSubmeshResolver.hpp"
 #include "RuntimeSubmesh.hpp"
@@ -83,6 +88,15 @@ RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path
     material->Program=Frame.Shaders->Load(shaderPath,ContentBytes(shaderPath,source));
     material->set_Id(metadata.at("materialAssetId").get<std::string>());
     material->set_CastsShadows(metadata.at("castsShadows").get<bool>()); material->set_ReceivesShadows(metadata.at("receivesShadows").get<bool>());
+    auto& authoredState=metadata.at("renderState"); MaterialRenderState engineState;
+    engineState.set_BlendMode(authoredState.at("alphaMode")=="opaque"?MaterialBlendMode::Opaque:MaterialBlendMode::AlphaBlend);
+    engineState.set_CullMode(authoredState.at("doubleSided").get<bool>()?MaterialCullMode::None:MaterialCullMode::Back);
+    engineState.set_DepthTestEnabled(authoredState.at("depthTest").get<bool>()); engineState.set_DepthWriteEnabled(authoredState.at("depthWrite").get<bool>());
+    material->SetRenderState(&engineState);
+    auto* observed=material->get_RenderState();
+    auto observedJson=ArtifactJson({{"materialAssetId",metadata.at("materialAssetId")},{"blendMode",static_cast<int>(observed->get_BlendMode())},
+        {"cullMode",static_cast<int>(observed->get_CullMode())},{"depthTest",observed->get_DepthTestEnabled()},{"depthWrite",observed->get_DepthWriteEnabled()}}).dump();
+    EM_ASM({window['helengineMaterialDiagnostics']=window['helengineMaterialDiagnostics']||[]; window['helengineMaterialDiagnostics'].push(JSON.parse(UTF8ToString($0)));},observedJson.c_str());
     std::map<std::string,WGPUTextureView> views;
     for (auto& texture:metadata.at("textures")) {
         if(!Ui) throw std::runtime_error("Material texture upload requires the shared UI texture service");
@@ -134,7 +148,9 @@ void WebGpuRenderManager3D::Draw() {
         WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color; descriptor.depthStencilAttachment = &depth;
         Pass = wgpuCommandEncoderBeginRenderPass(Frame.Encoder, &descriptor);
         wgpuRenderPassEncoderSetViewport(Pass, viewport.X * Frame.Width(), viewport.Y * Frame.Height(), width, height, 0, 1);
-        camera->get_RenderQueue3D()->VisitOrdered(this);
+        auto* queue=camera->get_RenderQueue3D();
+        if(auto* list=dynamic_cast<RenderList3D*>(queue)) list->VisitCameraOrdered(this, camera);
+        else queue->VisitOrdered(this);
         wgpuRenderPassEncoderEnd(Pass); wgpuRenderPassEncoderRelease(Pass); Pass = nullptr;
         if (Ui) Ui->RenderCamera(camera);
     }
