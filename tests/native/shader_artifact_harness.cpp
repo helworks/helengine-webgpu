@@ -33,6 +33,11 @@ int main(int argc, char** argv) {
             broken = bytes; broken[28] = std::byte{255}; Reject([&] { ReadShaderArtifact(broken); });
             broken = bytes; broken.back() = std::byte{1}; Reject([&] { ReadShaderArtifact(broken); });
             for (auto& binding : shader.Metadata.at("bindings")) {
+                if (binding.at("class") == "texture" || binding.at("class") == "depth-texture" || binding.at("class") == "sampler") {
+                    auto changed = shader.Metadata;
+                    for (auto& b : changed.at("bindings")) if (b.at("binding") == binding.at("binding")) b[binding.at("class") == "sampler" ? "samplerType" : "sampleType"] = 99;
+                    Reject([&] { ReadShaderArtifact(Repack(shader, changed)); });
+                }
                 if (binding.at("class") != "constant-buffer") continue;
                 std::vector<std::byte> data(binding.at("sourceLayout").at("size").get<size_t>());
                 Require(PackMaterialBuffer(binding, data).size() == binding.at("size").get<size_t>());

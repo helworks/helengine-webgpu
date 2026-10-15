@@ -88,7 +88,7 @@ public static class WebGpuShaderArtifactSerializer {
                 WebGpuArtifactJson.Text(binding, "name");
                 string resourceClass = WebGpuArtifactJson.Text(binding, "class");
                 int slot = binding.GetProperty("binding").GetInt32();
-                if (resourceClass != "constant-buffer" && resourceClass != "texture" && resourceClass != "sampler"
+                if (resourceClass != "constant-buffer" && resourceClass != "texture" && resourceClass != "depth-texture" && resourceClass != "sampler"
                     || binding.GetProperty("group").GetInt32() != 0 || binding.GetProperty("registerSpace").GetInt32() != 0
                     || binding.GetProperty("registerIndex").GetInt32() < 0 || slot < 0 || !slots.Add(slot)
                     || binding.GetProperty("size").GetInt32() < 0) { throw new InvalidDataException("WGSP resource binding is invalid."); }
@@ -101,6 +101,13 @@ public static class WebGpuShaderArtifactSerializer {
                 if (resourceClass == "constant-buffer") {
                     ValidateMemberContainers(binding.GetProperty("layout"), true, 0);
                     ValidateMemberContainers(binding.GetProperty("sourceLayout"), true, 0);
+                } else if (resourceClass == "texture" || resourceClass == "depth-texture") {
+                    int dimension = binding.GetProperty("textureDimension").GetInt32();
+                    int sampleType = binding.GetProperty("sampleType").GetInt32();
+                    if (dimension != 1 && dimension != 4 || resourceClass == "texture" && sampleType != 5
+                        || resourceClass == "depth-texture" && sampleType != 0) { throw new InvalidDataException("WGSP texture type is unsupported."); }
+                } else if (binding.GetProperty("samplerType").GetInt32() != 0 && binding.GetProperty("samplerType").GetInt32() != 3) {
+                    throw new InvalidDataException("WGSP sampler type is unsupported.");
                 }
             }
         } catch (Exception error) when (error is KeyNotFoundException || error is InvalidOperationException || error is FormatException || error is EncoderFallbackException) {

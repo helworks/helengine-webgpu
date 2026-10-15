@@ -149,7 +149,7 @@ WebGpuShaderArtifact ReadShaderArtifact(std::span<const std::byte> bytes) {
     for (auto& b : m.at("bindings")) {
         Check(names.insert(Text(b,"name")).second && b.at("group") == 0 && b.at("registerSpace") == 0 && b.at("registerIndex").get<int>() >= 0, "WGSP resource identity is invalid");
         int slot = b.at("binding").get<int>(); Check(slot >= 0 && slot < 1000 && slots.insert(slot).second, "WGSP resource slot is invalid");
-        auto resource = Text(b,"class"); Check(resource == "constant-buffer" || resource == "texture" || resource == "sampler", "WGSP resource class is unsupported");
+        auto resource = Text(b,"class"); Check(resource == "constant-buffer" || resource == "texture" || resource == "depth-texture" || resource == "sampler", "WGSP resource class is unsupported");
         Check(b.at("stages").is_array() && !b.at("stages").empty() && b.at("stages").size() <= 2, "WGSP visibility is invalid"); std::set<std::string> stages;
         for (auto& stage : b.at("stages")) { auto s = stage.get<std::string>(); Check((s == "vertex" || s == "fragment") && stages.insert(s).second, "WGSP visibility stage is invalid"); }
         if (resource == "constant-buffer") {
@@ -157,8 +157,8 @@ WebGpuShaderArtifact ReadShaderArtifact(std::span<const std::byte> bytes) {
             Check(b.at("layout").at("members").is_array() && !b.at("layout").at("members").empty(), "WGSP uniform structure has invalid members");
             ValidateFinalLayout(b.at("layout"),size); SourceLayout(b.at("sourceLayout"),b.at("sourceLayout").at("size").get<size_t>(),0);
             Check(b.at("sourceLayout").at("size").get<size_t>() <= 65536, "WGSP original uniform exceeds limits");
-        } else if (resource == "texture") Check((b.at("textureDimension") == 1 || b.at("textureDimension") == 4) && b.at("sampleType") == 5, "WGSP texture type is unsupported");
-        else Check(b.at("samplerType") == 3, "WGSP sampler type is unsupported");
+        } else if (resource == "texture" || resource == "depth-texture") Check((b.at("textureDimension") == 1 || b.at("textureDimension") == 4) && b.at("sampleType") == (resource == "depth-texture" ? 0 : 5), "WGSP texture type is unsupported");
+        else Check(b.at("samplerType") == 0 || b.at("samplerType") == 3, "WGSP sampler type is unsupported");
     }
     return result;
 }

@@ -48,7 +48,7 @@ public sealed class WebGpuShaderBackend : IShaderBackend, IShaderBackendCachePol
     static ShaderBinding BuildSharedBinding(WebGpuShaderBinding binding) {
         ShaderResourceType type = binding.Class switch {
             "constant-buffer" => ShaderResourceType.ConstantBuffer,
-            "texture" => binding.TextureDimension == 4 ? ShaderResourceType.TextureCube : ShaderResourceType.Texture2D,
+            "texture" or "depth-texture" => binding.TextureDimension == 4 ? ShaderResourceType.TextureCube : ShaderResourceType.Texture2D,
             "sampler" => ShaderResourceType.Sampler,
             _ => throw new NotSupportedException("Unsupported WebGPU resource class: " + binding.Class)
         };

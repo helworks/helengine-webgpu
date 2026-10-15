@@ -83,7 +83,8 @@ internal sealed unsafe class WebGpuSpirvReflection {
             int slot = binding.GetProperty("binding").GetInt32();
             if (!originals.TryGetValue(slot, out JsonElement original)) { throw new InvalidOperationException("Tint introduced an unrecognized resource binding: " + slot); }
             string resourceClass = binding.GetProperty("class").GetString();
-            if (resourceClass != original.GetProperty("resourceClass").GetString()) { throw new InvalidOperationException("Tint changed the resource class at binding " + slot); }
+            string sourceClass = original.GetProperty("resourceClass").GetString();
+            if (resourceClass != sourceClass && !(resourceClass == "depth-texture" && sourceClass == "texture")) { throw new InvalidOperationException("Tint changed the resource class at binding " + slot); }
             JsonElement layout = binding.TryGetProperty("layout", out JsonElement value) ? value.Clone() : JsonSerializer.SerializeToElement(new { });
             bindings.Add(new WebGpuShaderBinding(original.GetProperty("name").GetString(), resourceClass,
                 original.GetProperty("registerIndex").GetInt32(), binding.GetProperty("group").GetInt32(), slot,

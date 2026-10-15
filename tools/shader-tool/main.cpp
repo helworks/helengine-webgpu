@@ -98,10 +98,11 @@ Json Reflect(const tint::Program& program) {
         if (resource.bind_group != 0) throw std::runtime_error("Only register space/group zero is supported");
         bool buffer = resource.resource_type == tint::inspector::ResourceBinding::ResourceType::kUniformBuffer;
         bool sampler = resource.resource_type == tint::inspector::ResourceBinding::ResourceType::kSampler;
+        bool sampled = resource.resource_type == tint::inspector::ResourceBinding::ResourceType::kSampledTexture;
         Json binding = {{"name", resource.variable_name}, {"class", ResourceClass(resource.resource_type)},
             {"group", resource.bind_group}, {"binding", resource.binding}, {"size", buffer ? resource.size : 0},
             {"textureDimension", !buffer && !sampler ? static_cast<uint32_t>(resource.dim) : 0},
-            {"sampleType", !buffer && !sampler ? static_cast<uint32_t>(resource.sampled_kind) : 0},
+            {"sampleType", sampled ? static_cast<uint32_t>(resource.sampled_kind) : 0},
             {"samplerType", sampler ? static_cast<uint32_t>(resource.sampler_type) : 0}};
         if (resource.resource_type == tint::inspector::ResourceBinding::ResourceType::kUniformBuffer) {
             bool found = false;
