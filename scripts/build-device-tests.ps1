@@ -26,7 +26,7 @@ $compilerArguments = @(
     ('-I' + (Join-Path $platformRoot 'src')), '-std=c++20', '--use-port=emdawnwebgpu', '--no-entry',
     '-sALLOW_MEMORY_GROWTH=1', '-sEXPORTED_RUNTIME_METHODS=["UTF8ToString"]', '-o', (Join-Path $OutputRoot 'device.js')
 )
-foreach ($generatedType in @('Asset','AudioAsset','AudioPlaybackRequest','KeyboardState','MouseState','InputFrameState','InputPointerState','InputTextState','int2')) {
+foreach ($generatedType in @('Asset','AudioAsset','AudioPlaybackRequest','KeyboardState','MouseState','InputFrameState','InputPointerState','InputTextState','InputGamepadState','int2')) {
     $compilerArguments += Join-Path $GeneratedCoreRoot ($generatedType + '.cpp')
 }
 & $compiler @compilerArguments

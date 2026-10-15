@@ -86,15 +86,23 @@ for(const entry of cases) test('scene '+entry.id,async({page})=>{
     await page.keyboard.down('w');await frames(page,40);await page.keyboard.up('w');
     expect(await page.evaluate(id=>window.helengineDiagnostics.entities[id].position,player[0])).not.toEqual(player[1].position);
     await key(page,'Escape');const paused=await page.evaluate(id=>window.helengineDiagnostics.entities[id].position,player[0]);
+    expect(await page.evaluate(()=>window.helengineDiagnostics.texts.some(text=>/pause/i.test(text)))).toBe(true);
+    expect((await readback(page)).uiPixels).toBeGreaterThan(0);
     await page.keyboard.down('w');await frames(page,20);await page.keyboard.up('w');
     expect(await page.evaluate(id=>window.helengineDiagnostics.entities[id].position,player[0])).toEqual(paused);
     await key(page,'Enter');
+    expect(await page.evaluate(()=>window.helengineDiagnostics.texts.some(text=>/pause/i.test(text)))).toBe(false);
   } else if(entry.kind==='benchmark') {
     const objectCount=texts=>Math.max(0,...texts.filter(text=>text.startsWith('Objects: ')).map(text=>Number(/^Objects: (\d+)/.exec(text)?.[1]||0)));
     const count=objectCount(before.state.texts);
     await expect.poll(async()=>objectCount(await page.evaluate(()=>window.helengineDiagnostics.texts)),{timeout:10000}).toBeGreaterThan(count);
   }
-  const pixels=await readback(page);expect(pixels.uiPixels).toBeGreaterThan(0);
+  const pixels=await readback(page);
+  if(entry.kind==='zombie') {
+    // The authored gameplay view has no HUD; its unbound model slots use the desktop magenta shader.
+    expect(pixels.background).toEqual([255,0,255,255]);
+    expect(pixels.center).not.toEqual(pixels.background);
+  } else expect(pixels.uiPixels).toBeGreaterThan(0);
   expect(await page.evaluate(()=>window.sceneGpu.draws)).toBeGreaterThan(before.gpu.draws);
   expect(await page.evaluate(()=>window.sceneGpu.errors)).toEqual([]);expect(errors).toEqual([]);
   console.log(JSON.stringify({scene:entry.id,components:before.state.components.filter((value,index,list)=>list.indexOf(value)===index),texts:before.state.texts,pixels}));
