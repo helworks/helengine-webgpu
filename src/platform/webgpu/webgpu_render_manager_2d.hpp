@@ -1,5 +1,6 @@
 #pragma once
 #include "webgpu_frame.hpp"
+#include "webgpu_shader_library.hpp"
 #include "RenderManager2D.hpp"
 #include "Batch2DSink.hpp"
 #include "Batch2DWriter.hpp"
@@ -48,9 +49,9 @@ private:
     Batch2DDrawableEmitter Emitter;
     /// Owns ordered command-list construction and its retained glyph metadata.
     std::unique_ptr<RenderCommandListBuilder2D> Commands;
-    /// Owns the common binding layout, sampler and two shader variants.
-    WGPUBindGroupLayout Layout = nullptr;
-    WGPUSampler Sampler = nullptr;
+    /// Retains original shared shader variants and borrows their cached pipelines.
+    std::shared_ptr<WebGpuShaderProgram> TexturedProgram, RoundedProgram;
+    WGPUBindGroup RoundedBinding = nullptr;
     WGPURenderPipeline Textured = nullptr, Rounded = nullptr;
     /// Owns stable vertex/index arenas rather than allocating per drawable.
     WGPUBuffer Vertices = nullptr, Indices = nullptr;

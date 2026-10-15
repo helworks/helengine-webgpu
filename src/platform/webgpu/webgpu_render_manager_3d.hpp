@@ -33,15 +33,10 @@ public:
 private:
     /// Borrows frame attachments and upload storage from the host.
     WebGpuFrame& Frame;
-    /// Holds the basic mesh render pipeline.
-    WGPURenderPipeline Pipeline = nullptr;
-    /// Holds the uniform binding layout and reusable binding.
-    WGPUBindGroupLayout Layout = nullptr;
-    WGPUBindGroup Binding = nullptr;
     /// Borrows the current render pass during queue traversal.
     WGPURenderPassEncoder Pass = nullptr;
     /// Stores current camera and light constants.
     float4x4 ViewProjection;
-    float4 LightDirection, LightColor;
+    float4 LightDirection, LightColor, CameraPosition;
 };
 }

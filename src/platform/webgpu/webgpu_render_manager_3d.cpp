@@ -2,6 +2,7 @@
 #include "webgpu_render_manager_2d.hpp"
 #include "webgpu_runtime_model.hpp"
 #include "webgpu_runtime_material.hpp"
+#include "webgpu_material_bindings.hpp"
 #include "AssetSerializer.hpp"
 #include "Core.hpp"
 #include "ObjectManager.hpp"
@@ -25,50 +26,36 @@
 #include <vector>
 
 namespace helengine::webgpu {
-WebGpuRenderManager3D::WebGpuRenderManager3D(WebGpuFrame& frame) : Frame(frame) {
-    WGPUBindGroupLayoutEntry entry = WGPU_BIND_GROUP_LAYOUT_ENTRY_INIT;
-    entry.binding = 0; entry.visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
-    entry.buffer.type = WGPUBufferBindingType_Uniform; entry.buffer.hasDynamicOffset = true; entry.buffer.minBindingSize = 176;
-    WGPUBindGroupLayoutDescriptor layout = WGPU_BIND_GROUP_LAYOUT_DESCRIPTOR_INIT;
-    layout.entryCount = 1; layout.entries = &entry; Layout = wgpuDeviceCreateBindGroupLayout(Frame.Device(), &layout);
-    WGPUPipelineLayoutDescriptor pipelineLayout = WGPU_PIPELINE_LAYOUT_DESCRIPTOR_INIT;
-    pipelineLayout.bindGroupLayoutCount = 1; pipelineLayout.bindGroupLayouts = &Layout;
-    WGPUPipelineLayout pipelineLayoutHandle = wgpuDeviceCreatePipelineLayout(Frame.Device(), &pipelineLayout);
-    WGPUBindGroupEntry binding = WGPU_BIND_GROUP_ENTRY_INIT;
-    binding.binding = 0; binding.buffer = Frame.Uniforms; binding.size = 176;
-    WGPUBindGroupDescriptor bind = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
-    bind.layout = Layout; bind.entryCount = 1; bind.entries = &binding; Binding = wgpuDeviceCreateBindGroup(Frame.Device(), &bind);
-    WGPUShaderModule shader = Frame.Shader("basic_mesh.wgsl");
-    WGPUVertexAttribute attributes[2] = {WGPU_VERTEX_ATTRIBUTE_INIT, WGPU_VERTEX_ATTRIBUTE_INIT};
-    attributes[0].format = WGPUVertexFormat_Float32x3; attributes[0].shaderLocation = 0;
-    attributes[1].format = WGPUVertexFormat_Float32x3; attributes[1].shaderLocation = 1; attributes[1].offset = 12;
-    WGPUVertexBufferLayout vertices = WGPU_VERTEX_BUFFER_LAYOUT_INIT;
-    vertices.arrayStride = 24; vertices.attributeCount = 2; vertices.attributes = attributes; vertices.stepMode = WGPUVertexStepMode_Vertex;
-    WGPUColorTargetState color = WGPU_COLOR_TARGET_STATE_INIT; color.format = Frame.Format();
-    WGPUFragmentState fragment = WGPU_FRAGMENT_STATE_INIT; fragment.module = shader; fragment.entryPoint = {"fs_main", WGPU_STRLEN}; fragment.targetCount = 1; fragment.targets = &color;
-    WGPUDepthStencilState depth = WGPU_DEPTH_STENCIL_STATE_INIT;
-    depth.format = WGPUTextureFormat_Depth24Plus; depth.depthWriteEnabled = WGPUOptionalBool_True; depth.depthCompare = WGPUCompareFunction_Less;
-    WGPURenderPipelineDescriptor pipeline = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT;
-    pipeline.layout = pipelineLayoutHandle; pipeline.vertex.module = shader; pipeline.vertex.entryPoint = {"vs_main", WGPU_STRLEN};
-    pipeline.vertex.bufferCount = 1; pipeline.vertex.buffers = &vertices; pipeline.fragment = &fragment; pipeline.depthStencil = &depth;
-    pipeline.primitive.topology = WGPUPrimitiveTopology_TriangleList; pipeline.primitive.frontFace = WGPUFrontFace_CCW; pipeline.primitive.cullMode = WGPUCullMode_Back;
-    Pipeline = wgpuDeviceCreateRenderPipeline(Frame.Device(), &pipeline);
-    wgpuShaderModuleRelease(shader); wgpuPipelineLayoutRelease(pipelineLayoutHandle);
+namespace {
+std::vector<std::byte> ContentBytes(const std::string& path, IContentStreamSource* source) {
+    if (!source) throw std::runtime_error("Cooked material requires a content stream source");
+    std::unique_ptr<Stream> stream(source->OpenRead(path));
+    if (!stream) throw std::runtime_error("Missing cooked material/shader: "+path);
+    std::vector<std::byte> bytes; uint8_t block[8192];
+    while (size_t count=stream->Read(block,0,sizeof(block))) {
+        if (bytes.size()+count>64*1024*1024) throw std::runtime_error("Cooked material/shader exceeds its size limit: "+path);
+        bytes.insert(bytes.end(),reinterpret_cast<std::byte*>(block),reinterpret_cast<std::byte*>(block)+count);
+    }
+    return bytes;
 }
-WebGpuRenderManager3D::~WebGpuRenderManager3D() {
-    if (Binding) wgpuBindGroupRelease(Binding);
-    if (Layout) wgpuBindGroupLayoutRelease(Layout);
-    if (Pipeline) wgpuRenderPipelineRelease(Pipeline);
+void FloatMember(const ArtifactJson& member, const float4& value, std::span<std::byte> bytes) {
+    size_t offset=member.at("offset").get<size_t>();
+    if (member.at("size") != 16 || offset+16>bytes.size()) throw std::runtime_error("Engine float4 does not match shader reflection");
+    std::memcpy(bytes.data()+offset,&value,16);
 }
+}
+WebGpuRenderManager3D::WebGpuRenderManager3D(WebGpuFrame& frame) : Frame(frame) {}
+WebGpuRenderManager3D::~WebGpuRenderManager3D() = default;
 RuntimeModel* WebGpuRenderManager3D::BuildModelFromRaw(ModelAsset* data) {
     if (!data || !data->Positions || !data->Normals || !data->Positions->Length || data->Positions->Length != data->Normals->Length) throw std::runtime_error("WebGPU mesh requires matching nonempty positions and normals");
     std::unique_ptr<WebGpuRuntimeModel> model(new WebGpuRuntimeModel());
     model->set_Id(data->get_Id()); model->SetBounds(data->BoundsMin, data->BoundsMax);
-    struct Vertex { float Position[3], Normal[3]; };
+    struct Vertex { float Position[3], Normal[3], Uv[2]; };
     std::vector<Vertex> vertices(data->Positions->Length);
     for (int32_t i = 0; i < data->Positions->Length; ++i) {
         auto p = (*data->Positions)[i]; auto n = (*data->Normals)[i];
-        vertices[i] = {{p.X, p.Y, p.Z}, {n.X, n.Y, n.Z}};
+        float2 uv = data->TexCoords && i<data->TexCoords->Length ? (*data->TexCoords)[i] : float2(0,0);
+        vertices[i] = {{p.X, p.Y, p.Z}, {n.X, n.Y, n.Z}, {uv.X,uv.Y}};
     }
     model->VertexCount = static_cast<uint32_t>(vertices.size());
     model->Vertices = Frame.Buffer(vertices.data(), vertices.size() * sizeof(Vertex), WGPUBufferUsage_Vertex);
@@ -87,20 +74,24 @@ RuntimeModel* WebGpuRenderManager3D::BuildModelFromCooked(std::string path, ICon
     if (!model) throw std::runtime_error("Prepared model has the wrong asset type: " + path);
     return BuildModelFromRaw(model);
 }
-RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(PlatformMaterialAsset* data) {
-    if (!data || data->RendererFamilyId != "webgpu") throw std::runtime_error("Material was not cooked for WebGPU");
-    if (data->DoubleSided || data->UseVertexColor || !data->TextureRelativePath.empty()) throw std::runtime_error("WebGPU basic 3D material does not support the requested extended fields");
-    auto* material = new WebGpuRuntimeMaterial(); material->set_Id(data->get_Id());
-    material->Color = float4(data->BaseColorR / 255.f, data->BaseColorG / 255.f, data->BaseColorB / 255.f, data->BaseColorA / 255.f);
-    material->Lit = data->Lit;
-    material->set_CastsShadows(false); material->set_ReceivesShadows(false);
-    return material;
+RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(PlatformMaterialAsset*) {
+    throw std::runtime_error("WebGPU materials require versioned WGPM data through the path/stream overload");
 }
 RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path, IContentStreamSource* source) {
-    std::unique_ptr<Stream> stream(source->OpenRead(path)); std::unique_ptr<Asset> asset(AssetSerializer::Deserialize(stream.get()));
-    auto* material = dynamic_cast<PlatformMaterialAsset*>(asset.get());
-    if (!material) throw std::runtime_error("Prepared material has the wrong asset type: " + path);
-    return BuildMaterialFromCooked(material);
+    auto material=std::make_unique<WebGpuRuntimeMaterial>(); material->Artifact=ReadMaterialArtifact(ContentBytes(path,source));
+    auto& metadata=material->Artifact.Metadata; std::string shaderPath=metadata.at("shaderPath");
+    material->Program=Frame.Shaders->Load(shaderPath,ContentBytes(shaderPath,source));
+    material->set_Id(metadata.at("materialAssetId").get<std::string>());
+    material->set_CastsShadows(metadata.at("castsShadows").get<bool>()); material->set_ReceivesShadows(metadata.at("receivesShadows").get<bool>());
+    std::map<std::string,WGPUTextureView> views;
+    for (auto& texture:metadata.at("textures")) {
+        if(!Ui) throw std::runtime_error("Material texture upload requires the shared UI texture service");
+        auto owned=std::unique_ptr<WebGpuRuntimeTexture>(static_cast<WebGpuRuntimeTexture*>(Ui->BuildTextureFromCooked(texture.at("path").get<std::string>(),source)));
+        views.emplace(texture.at("name").get<std::string>(),owned->View); material->Textures.push_back(std::move(owned));
+    }
+    material->Binding=Frame.Shaders->CreateBinding(*material->Program,views);
+    Frame.Shaders->Pipeline(*material->Program,false,metadata.at("renderState"));
+    return material.release();
 }
 RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, 1, 0); }
 void WebGpuRenderManager3D::Draw() {
@@ -116,6 +107,7 @@ void WebGpuRenderManager3D::Draw() {
         float width = viewport.Z * Frame.Width(), height = viewport.W * Frame.Height();
         if (width <= 0 || height <= 0) continue;
         float3 position = camera->get_Parent()->get_Position();
+        CameraPosition = float4(position.X,position.Y,position.Z,1);
         auto orientation = camera->get_Parent()->get_Orientation();
         float3 target = position + float4::RotateVector(float3(0, 0, -1), orientation);
         float3 up = float4::RotateVector(float3(0, 1, 0), orientation);
@@ -141,7 +133,6 @@ void WebGpuRenderManager3D::Draw() {
         depth.view = Frame.Depth; depth.depthLoadOp = settings.get_ClearDepthEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; depth.depthStoreOp = WGPUStoreOp_Store; depth.depthClearValue = settings.get_ClearDepth();
         WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color; descriptor.depthStencilAttachment = &depth;
         Pass = wgpuCommandEncoderBeginRenderPass(Frame.Encoder, &descriptor);
-        wgpuRenderPassEncoderSetPipeline(Pass, Pipeline);
         wgpuRenderPassEncoderSetViewport(Pass, viewport.X * Frame.Width(), viewport.Y * Frame.Height(), width, height, 0, 1);
         camera->get_RenderQueue3D()->VisitOrdered(this);
         wgpuRenderPassEncoderEnd(Pass); wgpuRenderPassEncoderRelease(Pass); Pass = nullptr;
@@ -163,11 +154,35 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
     for (int32_t i = 0; i < count; ++i) {
         if (!materials || i >= materials->Length || !(*materials)[i]) throw std::runtime_error("Mesh submesh has no cooked material");
         auto* material = static_cast<WebGpuRuntimeMaterial*>((*materials)[i]->ResolveRootMaterial());
-        struct Constants { float4x4 Mvp, Normal; float4 Color, Direction, Light; } constants {mvp, normal, material->Color, LightDirection, LightColor};
-        static_assert(sizeof(Constants) == 176, "WGSL uniform packing must remain explicit");
-        if (!material->Lit) constants.Direction.W = 0;
-        uint32_t offset = Frame.Uniform(&constants, sizeof(constants));
-        wgpuRenderPassEncoderSetBindGroup(Pass, 0, Binding, 1, &offset);
+        auto& program=*material->Program; auto constants=material->Artifact.Constants; auto& state=material->Artifact.Metadata.at("renderState");
+        for (auto& binding:program.Artifact.Metadata.at("bindings")) {
+            if(binding.at("class")!="constant-buffer") continue;
+            std::string name=binding.at("name");
+            if(name!="TransformBuffer" && name!="ForwardLightBuffer" && name!="ShadowBuffer") continue;
+            auto& bytes=constants[name]; bytes.assign(binding.at("sourceLayout").at("size").get<size_t>(),std::byte{});
+            for(auto& member:binding.at("sourceLayout").at("members")) {
+                std::string field=member.at("name");
+                if(name=="TransformBuffer") {
+                    if(field=="world") WriteEngineMatrix(member,reinterpret_cast<const float*>(&world),bytes);
+                    else if(field=="worldViewProj") WriteEngineMatrix(member,reinterpret_cast<const float*>(&mvp),bytes);
+                    else if(field=="normalMatrix") WriteEngineMatrix(member,reinterpret_cast<const float*>(&normal),bytes);
+                    else if(field=="cameraPosition") FloatMember(member,CameraPosition,bytes);
+                    else if(field=="materialFlags") {
+                        bool emissive=false; for(auto& t:material->Artifact.Metadata.at("textures")) if(t.at("name")=="EmissiveTexture") emissive=true;
+                        FloatMember(member,float4(0,emissive?1:0,0,0),bytes);
+                    }
+                    else throw std::runtime_error("Unknown required engine transform member: "+field);
+                } else if(name=="ForwardLightBuffer") {
+                    bool lit=state.at("lit").get<bool>();
+                    if(field=="ambientLightColor") FloatMember(member,lit?float4(0.2f,0.2f,0.2f,1):float4(1,1,1,1),bytes);
+                    else if(field=="lightMetadata") FloatMember(member,float4(lit&&LightDirection.W>0?1:0,0,0,0),bytes);
+                    else if(field=="light0ColorAndType") FloatMember(member,float4(LightColor.X,LightColor.Y,LightColor.Z,0),bytes);
+                    else if(field=="light0DirectionAndShadow") FloatMember(member,float4(LightDirection.X,LightDirection.Y,LightDirection.Z,0),bytes);
+                }
+            }
+        }
+        wgpuRenderPassEncoderSetPipeline(Pass,Frame.Shaders->Pipeline(program,false,state));
+        Frame.Shaders->Bind(Pass,program,material->Binding,constants);
         uint32_t start = ranges && ranges->Length ? (*ranges)[i]->IndexStart : 0;
         uint32_t indices = ranges && ranges->Length ? (*ranges)[i]->IndexCount : model->IndexCount;
         if (model->Indices) wgpuRenderPassEncoderDrawIndexed(Pass, indices, 1, start, 0, 0);

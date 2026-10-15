@@ -6,6 +6,7 @@
     <IsPackable>false</IsPackable>
     <NuGetAudit>false</NuGetAudit>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <HelEngineRoot Condition="'$(HelEngineRoot)' == ''">..\..\helengine</HelEngineRoot>
   </PropertyGroup>
   <ItemGroup>

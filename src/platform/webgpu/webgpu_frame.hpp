@@ -2,8 +2,10 @@
 #include "webgpu_device_context.hpp"
 #include <cstddef>
 #include <string>
+#include <memory>
 
 namespace helengine::webgpu {
+class WebGpuShaderLibrary;
 /// Owns reusable frame resources and the command encoder shared by 3D and UI passes.
 class WebGpuFrame {
 public:
@@ -17,8 +19,8 @@ public:
     void End();
     /// Allocates an aligned uniform slice and copies its value into the reusable GPU arena.
     uint32_t Uniform(const void* data, size_t size);
-    /// Loads a platform WGSL asset from the preloaded filesystem.
-    WGPUShaderModule Shader(const char* filename);
+    /// Shares versioned shader modules and complete-state pipelines across both renderers.
+    std::unique_ptr<WebGpuShaderLibrary> Shaders;
     /// Creates an initialized GPU buffer with WebGPU-aligned storage size.
     WGPUBuffer Buffer(const void* data, size_t size, WGPUBufferUsage usage);
     /// Returns the shared device.

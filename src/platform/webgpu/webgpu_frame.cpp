@@ -1,4 +1,5 @@
 #include "webgpu_frame.hpp"
+#include "webgpu_shader_library.hpp"
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
@@ -9,8 +10,10 @@ WebGpuFrame::WebGpuFrame(WebGpuDeviceContext& context) : Context(context) {
     WGPUBufferDescriptor descriptor = WGPU_BUFFER_DESCRIPTOR_INIT;
     descriptor.size = 1024 * 1024; descriptor.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
     Uniforms = wgpuDeviceCreateBuffer(Device(), &descriptor);
+    Shaders = std::make_unique<WebGpuShaderLibrary>(*this);
 }
 WebGpuFrame::~WebGpuFrame() {
+    Shaders.reset();
     if (Color) wgpuTextureViewRelease(Color);
     if (SurfaceTexture) wgpuTextureRelease(SurfaceTexture);
     if (Encoder) wgpuCommandEncoderRelease(Encoder);
@@ -56,16 +59,6 @@ uint32_t WebGpuFrame::Uniform(const void* data, size_t size) {
     if (UniformCursor > 1024 * 1024) throw std::runtime_error("WebGPU frame uniform budget exceeded");
     wgpuQueueWriteBuffer(Queue, Uniforms, offset, data, size);
     return offset;
-}
-WGPUShaderModule WebGpuFrame::Shader(const char* filename) {
-    std::ifstream input(std::string("/content/platform/webgpu/") + filename);
-    if (!input) throw std::runtime_error(std::string("Missing WGSL shader: ") + filename);
-    std::string code((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    WGPUShaderSourceWGSL source = WGPU_SHADER_SOURCE_WGSL_INIT;
-    source.code = {code.c_str(), code.size()};
-    WGPUShaderModuleDescriptor descriptor = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
-    descriptor.nextInChain = &source.chain;
-    return wgpuDeviceCreateShaderModule(Device(), &descriptor);
 }
 WGPUBuffer WebGpuFrame::Buffer(const void* data, size_t size, WGPUBufferUsage usage) {
     if (!size) throw std::invalid_argument("GPU buffers require nonempty data");

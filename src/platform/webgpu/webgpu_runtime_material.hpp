@@ -1,14 +1,18 @@
 #pragma once
 #include "RuntimeMaterial.hpp"
 #include "float4.hpp"
+#include "webgpu_material_artifact_reader.hpp"
+#include "webgpu_shader_library.hpp"
+#include "webgpu_runtime_texture.hpp"
 
 namespace helengine::webgpu {
-/// Stores a cooked basic material's values without allocating GPU state per frame.
+/// Owns authored WGPM data, its retained shader pair and explicit texture resources.
 class WebGpuRuntimeMaterial : public RuntimeMaterial {
 public:
-    /// Holds the straight-alpha material color.
-    float4 Color;
-    /// Enables the supported directional-light contribution.
-    bool Lit = true;
+    ~WebGpuRuntimeMaterial() override { if (Binding) wgpuBindGroupRelease(Binding); }
+    WebGpuMaterialArtifact Artifact;
+    std::shared_ptr<WebGpuShaderProgram> Program;
+    std::vector<std::unique_ptr<WebGpuRuntimeTexture>> Textures;
+    WGPUBindGroup Binding = nullptr;
 };
 }

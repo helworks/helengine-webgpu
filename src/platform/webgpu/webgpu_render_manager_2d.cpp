@@ -1,5 +1,6 @@
 #include "webgpu_render_manager_2d.hpp"
 #include "webgpu_runtime_texture.hpp"
+#include "webgpu_material_bindings.hpp"
 #include "TextureAsset.hpp"
 #include "AssetSerializer.hpp"
 #include "IContentStreamSource.hpp"
@@ -17,31 +18,12 @@
 
 namespace helengine::webgpu {
 WebGpuRenderManager2D::WebGpuRenderManager2D(WebGpuFrame& frame) : Frame(frame), Writer(this, 512), Emitter(&Writer, this), Commands(new RenderCommandListBuilder2D()) {
-    WGPUBindGroupLayoutEntry entries[3] = {WGPU_BIND_GROUP_LAYOUT_ENTRY_INIT, WGPU_BIND_GROUP_LAYOUT_ENTRY_INIT, WGPU_BIND_GROUP_LAYOUT_ENTRY_INIT};
-    entries[0].binding = 0; entries[0].visibility = WGPUShaderStage_Vertex; entries[0].buffer.type = WGPUBufferBindingType_Uniform; entries[0].buffer.hasDynamicOffset = true; entries[0].buffer.minBindingSize = 64;
-    entries[1].binding = 1; entries[1].visibility = WGPUShaderStage_Fragment; entries[1].sampler.type = WGPUSamplerBindingType_Filtering;
-    entries[2].binding = 2; entries[2].visibility = WGPUShaderStage_Fragment; entries[2].texture.sampleType = WGPUTextureSampleType_Float; entries[2].texture.viewDimension = WGPUTextureViewDimension_2D;
-    WGPUBindGroupLayoutDescriptor layout = WGPU_BIND_GROUP_LAYOUT_DESCRIPTOR_INIT; layout.entryCount = 3; layout.entries = entries;
-    Layout = wgpuDeviceCreateBindGroupLayout(Frame.Device(), &layout);
-    WGPUSamplerDescriptor sampler = WGPU_SAMPLER_DESCRIPTOR_INIT; sampler.magFilter = WGPUFilterMode_Linear; sampler.minFilter = WGPUFilterMode_Linear;
-    Sampler = wgpuDeviceCreateSampler(Frame.Device(), &sampler);
-    WGPUPipelineLayoutDescriptor pipelineLayout = WGPU_PIPELINE_LAYOUT_DESCRIPTOR_INIT; pipelineLayout.bindGroupLayoutCount = 1; pipelineLayout.bindGroupLayouts = &Layout;
-    WGPUPipelineLayout pipelineLayoutHandle = wgpuDeviceCreatePipelineLayout(Frame.Device(), &pipelineLayout);
-    WGPUShaderModule shader = Frame.Shader("ui.wgsl");
-    WGPUVertexAttribute attributes[6];
-    for (uint32_t i = 0; i < 6; ++i) { attributes[i] = WGPU_VERTEX_ATTRIBUTE_INIT; attributes[i].format = WGPUVertexFormat_Float32x4; attributes[i].shaderLocation = i; attributes[i].offset = i * 16; }
-    WGPUVertexBufferLayout vertices = WGPU_VERTEX_BUFFER_LAYOUT_INIT; vertices.arrayStride = 96; vertices.attributeCount = 6; vertices.attributes = attributes; vertices.stepMode = WGPUVertexStepMode_Vertex;
-    WGPUBlendState blend = WGPU_BLEND_STATE_INIT;
-    blend.color.srcFactor = WGPUBlendFactor_SrcAlpha; blend.color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-    blend.alpha.srcFactor = WGPUBlendFactor_One; blend.alpha.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-    WGPUColorTargetState color = WGPU_COLOR_TARGET_STATE_INIT; color.format = Frame.Format(); color.blend = &blend;
-    WGPUFragmentState fragment = WGPU_FRAGMENT_STATE_INIT; fragment.module = shader; fragment.targetCount = 1; fragment.targets = &color;
-    WGPURenderPipelineDescriptor pipeline = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT;
-    pipeline.layout = pipelineLayoutHandle; pipeline.vertex.module = shader; pipeline.vertex.entryPoint = {"vs_main", WGPU_STRLEN}; pipeline.vertex.bufferCount = 1; pipeline.vertex.buffers = &vertices; pipeline.fragment = &fragment;
-    pipeline.primitive.topology = WGPUPrimitiveTopology_TriangleList;
-    fragment.entryPoint = {"fs_texture", WGPU_STRLEN}; Textured = wgpuDeviceCreateRenderPipeline(Frame.Device(), &pipeline);
-    fragment.entryPoint = {"fs_rounded", WGPU_STRLEN}; Rounded = wgpuDeviceCreateRenderPipeline(Frame.Device(), &pipeline);
-    wgpuShaderModuleRelease(shader); wgpuPipelineLayoutRelease(pipelineLayoutHandle);
+    ArtifactJson selection = {{"shaderAssetId","SpriteBatchShader"},{"vertexProgram","SpriteBatchShader.vs"},{"pixelProgram","SpriteBatchShader.ps"},{"variant","Textured"}};
+    TexturedProgram = Frame.Shaders->Load(ShaderArtifactPath(selection));
+    selection["variant"] = "RoundedShape"; RoundedProgram = Frame.Shaders->Load(ShaderArtifactPath(selection));
+    ArtifactJson state = {{"alphaMode","alpha-blend"},{"doubleSided",true},{"useVertexColor",true},{"lit",false},{"depthTest",false},{"depthWrite",false}};
+    Textured = Frame.Shaders->Pipeline(*TexturedProgram,true,state); Rounded = Frame.Shaders->Pipeline(*RoundedProgram,true,state);
+    RoundedBinding = Frame.Shaders->CreateBinding(*RoundedProgram,{});
     Vertices = Frame.Buffer(nullptr, 4 * 1024 * 1024, WGPUBufferUsage_Vertex); Indices = Frame.Buffer(nullptr, 1024 * 1024, WGPUBufferUsage_Index);
     TextureAsset white; white.Width = 1; white.Height = 1; white.ColorFormat = TextureAssetColorFormat::Rgba32; white.Colors = new Array<uint8_t>(4);
     for (int i = 0; i < 4; ++i) (*white.Colors)[i] = 255;
@@ -50,8 +32,7 @@ WebGpuRenderManager2D::WebGpuRenderManager2D(WebGpuFrame& frame) : Frame(frame),
 WebGpuRenderManager2D::~WebGpuRenderManager2D() {
     Writer.Dispose(); White.reset();
     if (Vertices) wgpuBufferRelease(Vertices); if (Indices) wgpuBufferRelease(Indices);
-    if (Textured) wgpuRenderPipelineRelease(Textured); if (Rounded) wgpuRenderPipelineRelease(Rounded);
-    if (Layout) wgpuBindGroupLayoutRelease(Layout); if (Sampler) wgpuSamplerRelease(Sampler);
+    if (RoundedBinding) wgpuBindGroupRelease(RoundedBinding);
 }
 RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromRaw(TextureAsset* data) {
     if (!data || !data->Width || !data->Height || data->ColorFormat != TextureAssetColorFormat::Rgba32 || !data->Colors || data->Colors->Length != data->Width * data->Height * 4) throw std::runtime_error("WebGPU texture requires complete RGBA32 data");
@@ -64,11 +45,7 @@ RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromRaw(TextureAsset* data) {
     WGPUTexelCopyBufferLayout bytes = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT; bytes.bytesPerRow = data->Width * 4; bytes.rowsPerImage = data->Height;
     WGPUExtent3D extent {data->Width, data->Height, 1};
     wgpuQueueWriteTexture(Frame.Queue, &destination, data->Colors->Data, data->Colors->Length, &bytes, &extent);
-    WGPUBindGroupEntry entries[3] = {WGPU_BIND_GROUP_ENTRY_INIT, WGPU_BIND_GROUP_ENTRY_INIT, WGPU_BIND_GROUP_ENTRY_INIT};
-    entries[0].binding = 0; entries[0].buffer = Frame.Uniforms; entries[0].size = 64;
-    entries[1].binding = 1; entries[1].sampler = Sampler; entries[2].binding = 2; entries[2].textureView = texture->View;
-    WGPUBindGroupDescriptor bind = WGPU_BIND_GROUP_DESCRIPTOR_INIT; bind.layout = Layout; bind.entryCount = 3; bind.entries = entries;
-    texture->Binding = wgpuDeviceCreateBindGroup(Frame.Device(), &bind);
+    texture->Binding = Frame.Shaders->CreateBinding(*TexturedProgram,{{"BatchTexture",texture->View}});
     return texture.release();
 }
 RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromCooked(std::string path, IContentStreamSource* source) {
@@ -103,9 +80,12 @@ void WebGpuRenderManager2D::Submit(Batch2DBuffer* buffer, Batch2DRun run) {
     wgpuQueueWriteBuffer(Frame.Queue, Indices, IndexCursor, buffer->Indices->Data, indexBytes);
     auto* texture = run.get_Variant() == Batch2DVariant::RoundedShape ? White.get() : static_cast<WebGpuRuntimeTexture*>(run.get_Texture());
     if (!texture || texture->get_IsDisposed()) throw std::runtime_error("UI batch references a missing or disposed texture");
-    uint32_t offset = Frame.Uniform(&Projection, sizeof(Projection));
+    auto& program = run.get_Variant() == Batch2DVariant::RoundedShape ? *RoundedProgram : *TexturedProgram;
+    auto& reflected = program.Artifact.Metadata.at("bindings").at(0);
+    std::vector<std::byte> camera(reflected.at("sourceLayout").at("size").get<size_t>());
+    WriteEngineMatrix(reflected.at("sourceLayout").at("members").at(0),reinterpret_cast<const float*>(&Projection),camera);
     wgpuRenderPassEncoderSetPipeline(Pass, run.get_Variant() == Batch2DVariant::RoundedShape ? Rounded : Textured);
-    wgpuRenderPassEncoderSetBindGroup(Pass, 0, texture->Binding, 1, &offset);
+    Frame.Shaders->Bind(Pass,program,run.get_Variant() == Batch2DVariant::RoundedShape ? RoundedBinding : texture->Binding,{{"BatchCameraBuffer",std::move(camera)}});
     wgpuRenderPassEncoderSetVertexBuffer(Pass, 0, Vertices, VertexCursor, vertexBytes);
     wgpuRenderPassEncoderSetIndexBuffer(Pass, Indices, WGPUIndexFormat_Uint16, IndexCursor, indexBytes);
     wgpuRenderPassEncoderSetScissorRect(Pass, run.get_ScissorX(), run.get_ScissorY(), run.get_ScissorWidth(), run.get_ScissorHeight());

@@ -4,6 +4,16 @@ namespace helengine.webgpu.builder.tests;
 
 /// <summary>Protects validation, cancellation and package publication across the compiler boundary.</summary>
 public sealed class WebGpuBuildWorkspaceTests {
+    /// <summary>Native compilation requires cooked renderer-owned UI selections rather than the obsolete fixed WGSL files.</summary>
+    [Fact]
+    public async Task Missing_renderer_shader_artifact_fails_before_native_compile() {
+        WebGpuBuildFixture fixture = new(); TestNativeBuildExecutor executor = new(); TestBuildReporter reporter = new();
+        string shaders = Path.Combine(fixture.Root, "staged", "cooked", "shaders");
+        if (Directory.Exists(shaders)) { Directory.Delete(shaders, true); }
+        var result = await new WebGpuBuildWorkspace(executor, Path.Combine(fixture.Root, "staged"), fixture.Root).BuildAsync(fixture.CreateRequest(), reporter, reporter, CancellationToken.None);
+        Assert.False(result.Succeeded); Assert.Equal(0, executor.Calls);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("shader", StringComparison.OrdinalIgnoreCase));
+    }
     /// <summary>Ensures a missing required scene cannot start native compilation.</summary>
     [Fact]
     public async Task Missing_payload_fails_before_native_compile() {

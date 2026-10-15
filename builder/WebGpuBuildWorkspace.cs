@@ -61,11 +61,7 @@ public sealed class WebGpuBuildWorkspace {
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)); File.Copy(source, destination, true);
             }
             if (request.ExecutionScope == PlatformBuildExecutionScope.Full) {
-                string shaderRoot = Path.Combine(RepositoryRoot, "shaders");
-                if (!Directory.Exists(shaderRoot)) { throw new DirectoryNotFoundException("WebGPU platform shaders are missing."); }
-                string cookedShaders = Path.Combine(contentRoot, "platform", "webgpu");
-                Directory.CreateDirectory(cookedShaders);
-                foreach (string shader in Directory.GetFiles(shaderRoot, "*.wgsl")) { File.Copy(shader, Path.Combine(cookedShaders, Path.GetFileName(shader)), true); }
+                ValidateShaderArtifacts(request, contentRoot);
                 cancellationToken.ThrowIfCancellationRequested();
                 progress.Report(new PlatformBuildProgressUpdate("WebAssembly", "webgpu", 0, 1, "Compiling generated engine and browser host."));
                 string nativeRoot = string.IsNullOrWhiteSpace(request.NativeObjectCacheRoot) ? Path.Combine(request.WorkingRoot, "native") : request.NativeObjectCacheRoot;
@@ -93,11 +89,31 @@ public sealed class WebGpuBuildWorkspace {
                 request.Manifest.Scenes.Select(scene => new PlatformBuildItemOutcome(scene.SceneId, PlatformBuildItemOutcomeKind.Succeeded)).ToArray(),
                 request.Manifest.LooseAssets.Select(asset => new PlatformBuildItemOutcome(asset.AssetId, PlatformBuildItemOutcomeKind.Succeeded)).ToArray()));
         } catch (OperationCanceledException) { throw; }
-        catch (Exception error) when (error is IOException || error is InvalidOperationException || error is ArgumentException || error is NotSupportedException) {
+        catch (Exception error) when (error is IOException || error is InvalidDataException || error is InvalidOperationException || error is ArgumentException || error is NotSupportedException) {
             PlatformBuildDiagnostic diagnostic = new(PlatformBuildDiagnosticSeverity.Error, "WEBGPU_BUILD", error.Message, "", "", StagingRoot);
             diagnostics.Report(diagnostic);
             return Task.FromResult(new PlatformBuildReport(false, [diagnostic],
                 request.Manifest.Scenes.Select(scene => new PlatformBuildItemOutcome(scene.SceneId, PlatformBuildItemOutcomeKind.Failed)).ToArray(), []));
+        }
+    }
+
+    /// <summary>Requires declared renderer dependencies and verifies every cooked shader before native compilation.</summary>
+    static void ValidateShaderArtifacts(PlatformBuildRequest request, string contentRoot) {
+        HashSet<string> declared = new(StringComparer.Ordinal);
+        foreach (var artifact in request.Manifest.CookedArtifacts.Where(value => value.ArtifactKind == "shader")) {
+            string relative = artifact.RelativePath.Replace('\\', '/');
+            if (relative.StartsWith("cooked/", StringComparison.Ordinal)) { relative = relative[7..]; }
+            string path = ContainedPath(contentRoot, "cooked/" + relative);
+            if (!File.Exists(path)) { throw new FileNotFoundException("Declared WebGPU shader artifact is missing.", path); }
+            WebGpuShaderArtifact shader = WebGpuShaderArtifactSerializer.Deserialize(File.ReadAllBytes(path));
+            var metadata = shader.Metadata;
+            var dependency = new helengine.baseplatform.Results.PlatformShaderDependency(metadata.GetProperty("shaderAssetId").GetString(),
+                metadata.GetProperty("vertexProgram").GetString(), metadata.GetProperty("pixelProgram").GetString(), metadata.GetProperty("variant").GetString());
+            if (WebGpuShaderArtifactIdentity.RelativePath(dependency) != relative) { throw new InvalidDataException("Declared WebGPU shader path does not match its selection."); }
+            declared.Add(relative);
+        }
+        foreach (var dependency in new WebGpuPlatformAssetBuilder().RendererShaderDependencies) {
+            if (!declared.Contains(WebGpuShaderArtifactIdentity.RelativePath(dependency))) { throw new InvalidDataException("Required renderer shader artifact is not declared: " + dependency.ShaderAssetId + "/" + dependency.VariantName); }
         }
     }
 
