@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 #include <nlohmann/json.hpp>
+#include <spirv-tools/optimizer.hpp>
 #include "src/tint/api/tint.h"
 #include "src/tint/lang/wgsl/reader/reader.h"
 #include "src/tint/lang/wgsl/program/program.h"
@@ -137,8 +138,18 @@ int wmain(int argc, wchar_t** argv) {
         }
         if (!args.contains(L"--input") || !args.contains(L"--wgsl") || !args.contains(L"--reflection")) throw std::runtime_error("Invalid shader arguments");
         auto words = ReadSpirv(std::filesystem::path(args.at(L"--input")));
+        // HLSL semantic decorations are retained in the caller's original SPIR-V reflection.
+        // Tint receives an execution-equivalent copy without unsupported reflection extensions.
+        spvtools::Optimizer optimizer(SPV_ENV_VULKAN_1_0);
+        std::string optimizerError;
+        optimizer.SetMessageConsumer([&](spv_message_level_t, const char*, const spv_position_t&, const char* message) {
+            if (optimizerError.size() < 16384) optimizerError.append(message, std::min<size_t>(std::char_traits<char>::length(message), 16384 - optimizerError.size()));
+        });
+        optimizer.RegisterPass(spvtools::CreateStripReflectInfoPass());
+        std::vector<uint32_t> executionWords;
+        if (!optimizer.Run(words.data(), words.size(), &executionWords)) throw std::runtime_error("SPIR-V reflection stripping failed: " + optimizerError);
         tint::Initialize();
-        auto generated = tint::SpirvToWgsl(words);
+        auto generated = tint::SpirvToWgsl(executionWords);
         if (generated != tint::Success) throw std::runtime_error(generated.Failure().reason);
         tint::Source::File source("lowered.wgsl", generated.Get());
         auto program = tint::wgsl::reader::Parse(&source);
