@@ -3,6 +3,7 @@
 #include "webgpu_runtime_model.hpp"
 #include "webgpu_runtime_material.hpp"
 #include "webgpu_material_bindings.hpp"
+#include "webgpu_shadow_renderer.hpp"
 #include "AssetSerializer.hpp"
 #include "Core.hpp"
 #include "ObjectManager.hpp"
@@ -49,7 +50,7 @@ void FloatMember(const ArtifactJson& member, const float4& value, std::span<std:
     std::memcpy(bytes.data()+offset,&value,16);
 }
 }
-WebGpuRenderManager3D::WebGpuRenderManager3D(WebGpuFrame& frame) : Frame(frame) {}
+WebGpuRenderManager3D::WebGpuRenderManager3D(WebGpuFrame& frame) : Frame(frame),Shadows(std::make_unique<WebGpuShadowRenderer>(frame)) {}
 WebGpuRenderManager3D::~WebGpuRenderManager3D() = default;
 RuntimeModel* WebGpuRenderManager3D::BuildModelFromRaw(ModelAsset* data) {
     if (!data || !data->Positions || !data->Normals || !data->Positions->Length || data->Positions->Length != data->Normals->Length) throw std::runtime_error("WebGPU mesh requires matching nonempty positions and normals");
@@ -103,6 +104,7 @@ RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path
         auto owned=std::unique_ptr<WebGpuRuntimeTexture>(static_cast<WebGpuRuntimeTexture*>(Ui->BuildTextureFromCooked(texture.at("path").get<std::string>(),source)));
         views.emplace(texture.at("name").get<std::string>(),owned->View); material->Textures.push_back(std::move(owned));
     }
+    material->TextureViews=views;
     material->Binding=Frame.Shaders->CreateBinding(*material->Program,views);
     Frame.Shaders->Pipeline(*material->Program,false,metadata.at("renderState"));
     return material.release();
@@ -131,7 +133,9 @@ void WebGpuRenderManager3D::Draw() {
         float4x4::Multiply__ref0_ref1_out2(view, projection, ViewProjection);
         Lights.Prepare(core,camera,std::min(get_MaximumVisibleLights(),4));
         ForwardValues=Lights.ForwardValues();
-        ShadowPlan.Prepare(camera,Lights,0);
+        ShadowPlan.Prepare(camera,Lights,get_ShadowsEnabled()?4:0);
+        Shadows->Render(camera,ShadowPlan);
+        ShadowValues=Shadows->ShadowValues();
         auto settings = camera->get_ClearSettings();
         auto clear = settings.get_ClearColor();
         WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
@@ -164,6 +168,10 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
     for (int32_t i = 0; i < count; ++i) {
         if (!materials || i >= materials->Length || !(*materials)[i]) throw std::runtime_error("Mesh submesh has no cooked material");
         auto* material = static_cast<WebGpuRuntimeMaterial*>((*materials)[i]->ResolveRootMaterial());
+        if(material->ShadowResourceGeneration!=Shadows->ResourceGeneration) {
+            auto views=material->TextureViews; for(auto& pair:Shadows->TextureBindings()) views.insert_or_assign(pair.first,pair.second);
+            auto binding=Frame.Shaders->CreateBinding(*material->Program,views); if(material->Binding) wgpuBindGroupRelease(material->Binding); material->Binding=binding; material->ShadowResourceGeneration=Shadows->ResourceGeneration;
+        }
         auto& program=*material->Program; auto constants=material->Artifact.Constants; auto& state=material->Artifact.Metadata.at("renderState");
         for (auto& binding:program.Artifact.Metadata.at("bindings")) {
             if(binding.at("class")!="constant-buffer") continue;
@@ -179,7 +187,7 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
                     else if(field=="cameraPosition") FloatMember(member,CameraPosition,bytes);
                     else if(field=="materialFlags") {
                         bool emissive=false; for(auto& t:material->Artifact.Metadata.at("textures")) if(t.at("name")=="EmissiveTexture") emissive=true;
-                        FloatMember(member,float4(0,emissive?1:0,0,0),bytes);
+                        FloatMember(member,float4(material->get_ReceivesShadows()?1:0,emissive?1:0,0,0),bytes);
                     }
                     else throw std::runtime_error("Unknown required engine transform member: "+field);
                 } else if(name=="ForwardLightBuffer") {
@@ -187,6 +195,11 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
                     if(!ForwardValues.contains(field)) throw std::runtime_error("Unknown required engine light member: "+field);
                     auto& value=ForwardValues.at(field);
                     FloatMember(member,lit?float4(value[0].get<float>(),value[1].get<float>(),value[2].get<float>(),value[3].get<float>()):field=="ambientLightColor"?float4(1,1,1,1):float4(0,0,0,0),bytes);
+                } else if(name=="ShadowBuffer") {
+                    if(!ShadowValues.contains(field)) throw std::runtime_error("Unknown required engine shadow member: "+field);
+                    auto& value=ShadowValues.at(field);
+                    if(value.size()==16) { auto matrix=value.get<std::vector<float>>(); WriteEngineMatrix(member,matrix.data(),bytes); }
+                    else FloatMember(member,float4(value[0].get<float>(),value[1].get<float>(),value[2].get<float>(),value[3].get<float>()),bytes);
                 }
             }
         }

@@ -9,6 +9,7 @@
 
 namespace helengine::webgpu {
 class WebGpuRenderManager2D;
+class WebGpuShadowRenderer;
 /// Draws the engine's ordered camera queues using a basic lit WebGPU mesh pipeline.
 class WebGpuRenderManager3D : public RenderManager3D, public IRenderVisitor3D {
 public:
@@ -43,5 +44,7 @@ private:
     WebGpuLightState Lights;
     WebGpuShadowPlan ShadowPlan;
     ArtifactJson ForwardValues;
+    ArtifactJson ShadowValues;
+    std::unique_ptr<WebGpuShadowRenderer> Shadows;
 };
 }

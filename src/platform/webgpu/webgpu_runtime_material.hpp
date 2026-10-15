@@ -14,5 +14,7 @@ public:
     std::shared_ptr<WebGpuShaderProgram> Program;
     std::vector<std::unique_ptr<WebGpuRuntimeTexture>> Textures;
     WGPUBindGroup Binding = nullptr;
+    std::map<std::string,WGPUTextureView> TextureViews;
+    uint64_t ShadowResourceGeneration = 0;
 };
 }

@@ -15,11 +15,15 @@ public sealed class WebGpuBuildFixture {
         Root = Path.Combine("C:\\dev\\helworks\\builds\\helengine-webgpu\\managed-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(Root, "staged", "cooked", "scenes"));
         File.WriteAllText(Path.Combine(Root, "staged", "cooked", "scenes", "cube.helen"), "scene fixture");
-        string path = "C:/dev/helworks/helengine/engine/helengine.editor/shaders/builtin/SpriteBatchShader.hlsl";
-        string text = File.ReadAllText(path);
+        var dependencies = new WebGpuPlatformAssetBuilder().RendererShaderDependencies;
+        List<PlatformShaderArtifactCookSource> sources = [];
+        foreach (string asset in dependencies.Select(value => value.ShaderAssetId).Distinct(StringComparer.Ordinal)) {
+            string path = "C:/dev/helworks/helengine/engine/helengine.editor/shaders/builtin/" + asset + ".hlsl";
+            string text = File.ReadAllText(path);
+            sources.Add(new PlatformShaderArtifactCookSource(asset, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))), text, path));
+        }
         new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Path.Combine(Root, "staged", "cooked"), "webgpu", "release", "webgpu",
-            new WebGpuPlatformAssetBuilder().RendererShaderDependencies,
-            [new PlatformShaderArtifactCookSource("SpriteBatchShader", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))), text, path)]));
+            dependencies, sources));
         Directory.CreateDirectory(Path.Combine(Root, "web"));
         File.WriteAllText(Path.Combine(Root, "web", "index.html"), "<!doctype html><title>fixture</title>");
         File.WriteAllText(Path.Combine(Root, "web", "bootstrap.js"), "fixture bootstrap");

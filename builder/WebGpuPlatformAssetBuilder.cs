@@ -18,7 +18,8 @@ public sealed class WebGpuPlatformAssetBuilder : IPlatformAssetBuilder, IPlatfor
     /// <summary>Declares both shared UI variants independently of authored 3D materials.</summary>
     public IReadOnlyList<PlatformShaderDependency> RendererShaderDependencies { get; } = [
         new("SpriteBatchShader", "SpriteBatchShader.vs", "SpriteBatchShader.ps", "Textured"),
-        new("SpriteBatchShader", "SpriteBatchShader.vs", "SpriteBatchShader.ps", "RoundedShape")];
+        new("SpriteBatchShader", "SpriteBatchShader.vs", "SpriteBatchShader.ps", "RoundedShape"),
+        new("EditorShadowDepth", "EditorShadowDepth.vs", "EditorShadowDepth.ps", "default")];
     /// <summary>Registers lazy native compilation without requiring WebGPU tools for other editor platforms.</summary>
     public void RegisterShaderBackends(ShaderBackendRegistry shaderBackendRegistry) {
         ArgumentNullException.ThrowIfNull(shaderBackendRegistry);
