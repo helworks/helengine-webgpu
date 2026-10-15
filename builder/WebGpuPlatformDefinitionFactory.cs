@@ -14,9 +14,27 @@ public static class WebGpuPlatformDefinitionFactory {
                 [Setting("default-width", "Canvas Width", "1280"), Setting("default-height", "Canvas Height", "720")])],
             [new PlatformAssetRequirementDefinition("scene", "Scene", true, ["helen"]),
              new PlatformAssetRequirementDefinition("texture", "Texture", true, ["png", "tga", "jpg", "bmp"])],
-            [new PlatformMaterialSchemaDefinition("standard-shader", "Basic WebGPU Material", ["webgpu"],
+            [new PlatformMaterialSchemaDefinition("standard-shader", "Standard WebGPU Material", ["webgpu"],
                 [new PlatformMaterialFieldDefinition("base-color", "Base Color", PlatformMaterialFieldKind.Color, "#ffffffff", true, []),
                  new PlatformMaterialFieldDefinition("use-custom-shader", "Custom Shader", PlatformMaterialFieldKind.Boolean, "false", true, []),
+                 MaterialField("shader-asset-id", "Shader", PlatformMaterialFieldKind.AssetReference, "ForwardStandardShader"),
+                 MaterialField("vertex-program", "Vertex Program", PlatformMaterialFieldKind.Text, "ForwardStandardShader.vs"),
+                 MaterialField("pixel-program", "Pixel Program", PlatformMaterialFieldKind.Text, "ForwardStandardShader.ps"),
+                 MaterialField("variant", "Variant", PlatformMaterialFieldKind.Text, "default"),
+                 MaterialField("roughness", "Roughness", PlatformMaterialFieldKind.Text, "0.4"),
+                 MaterialField("metallic", "Metallic", PlatformMaterialFieldKind.Text, "0"),
+                 MaterialField("specular", "Specular", PlatformMaterialFieldKind.Text, "0.5"),
+                 MaterialField("emissive-color", "Emissive Color", PlatformMaterialFieldKind.Color, "#ffffff00"),
+                 MaterialField("alpha-mode", "Alpha Mode", PlatformMaterialFieldKind.Text, "opaque"),
+                 MaterialField("double-sided", "Double Sided", PlatformMaterialFieldKind.Boolean, "false"),
+                 MaterialField("vertex-color-mode", "Vertex Color", PlatformMaterialFieldKind.Text, "ignore"),
+                 MaterialField("lighting-mode", "Lighting", PlatformMaterialFieldKind.Text, "lit"),
+                 MaterialField("depth-test", "Depth Test", PlatformMaterialFieldKind.Boolean, "true"),
+                 MaterialField("depth-write", "Depth Write", PlatformMaterialFieldKind.Boolean, "true"),
+                 MaterialField("texture-id", "Diffuse Texture", PlatformMaterialFieldKind.AssetReference, "", false),
+                 MaterialField("roughness-texture-id", "Roughness Texture", PlatformMaterialFieldKind.AssetReference, "", false),
+                 MaterialField("emissive-texture-id", "Emissive Texture", PlatformMaterialFieldKind.AssetReference, "", false),
+                 MaterialField("constant-buffers", "Named Constant Buffers", PlatformMaterialFieldKind.Text, "", false),
                  new PlatformMaterialFieldDefinition("casts-shadow", "Casts Shadows", PlatformMaterialFieldKind.Boolean, "false", true, []),
                  new PlatformMaterialFieldDefinition("receives-shadow", "Receives Shadows", PlatformMaterialFieldKind.Boolean, "false", true, []),
                  new PlatformMaterialFieldDefinition("texture-relative-path", "Texture", PlatformMaterialFieldKind.AssetReference, "", false, [])])],
@@ -35,6 +53,11 @@ public static class WebGpuPlatformDefinitionFactory {
             [new PlatformStorageProfileDefinition("loose-files", "Preloaded Files", PlatformStorageProfileKind.LooseFiles, "webgpu-preload", false)],
             [new PlatformMediaProfileDefinition("web-package", "Browser Package", PlatformMediaLayoutKind.InstallTree, false, false)],
             new RuntimeGenerationContract(RuntimeMaterialResolutionMode.CookedPlatformOwned, true, PackagedPathPolicy.ContentRelativeOnly, []));
+    }
+
+    /// <summary>Declares the shared material field contract and its explicit editor default.</summary>
+    static PlatformMaterialFieldDefinition MaterialField(string id, string name, PlatformMaterialFieldKind kind, string value, bool required = true) {
+        return new PlatformMaterialFieldDefinition(id, name, kind, value, required, []);
     }
 
     /// <summary>Creates a required textual setting with an explicit default supplied by the platform.</summary>

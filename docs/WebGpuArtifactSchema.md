@@ -58,8 +58,16 @@ Built-ins use the shared StandardShaderVariants and SpriteBatchShaderVariants ca
 
 All requested pairs are compiled and serialized before publication begins. Each output is written to a unique sibling temporary file and atomically renamed only after preparation succeeds. No declaration is returned for a failed cook. Native inputs and diagnostics live outside the scanned cooked-content tree.
 
-## WGPM envelope (approved; implementation pending)
+## WGPM v1
 
 Magic WGPM, version uint32 1, total file length uint32, JSON length uint32 form a 16-byte header. Strict UTF-8 JSON follows immediately. The JSON payload limit is 16,777,216 bytes. Reject unknown versions, invalid lengths, malformed UTF-8, duplicate keys and trailing bytes.
 
-The material preserves its original identity, explicit shader selection/path, render state, named constant buffers and texture references. Binary constant bytes use base64. The detailed material-property schema will be added with its writer and native reader; no material implementation is claimed by this shader-format checkpoint.
+The metadata object contains nonempty `materialAssetId`, `shaderAssetId`, `vertexProgram`, `pixelProgram`, `variant`, and `shaderPath` strings. `shaderPath` is `cooked/` plus the exact WGSP selection identity described above. Required booleans `castsShadows` and `receivesShadows` preserve authored intent independently of current renderer capabilities.
+
+`renderState` contains `alphaMode` (`opaque`, `alpha-blend`, or `additive`), and booleans `doubleSided`, `useVertexColor`, `lit`, `depthTest`, `depthWrite`.
+
+`constantBuffers` contains objects with unique nonempty `name` and canonical base64 `data`. Decoded data must be nonempty, a multiple of four bytes and at most 65,536 bytes per buffer. Standard named blocks are `BaseColorBuffer`, `RoughnessBuffer`, `MetallicBuffer`, `SpecularBuffer`, and `EmissiveColorBuffer`. RGBA channels use little-endian float4; scalar values broadcast to all four channels as in the shared engine material utilities. Optional `constant-buffers` input preserves explicitly provided raw named bytes; the editor does not currently project arbitrary custom buffers into that field.
+
+`textures` contains unique binding `name`, authored `assetId`, and canonical content-relative `path`. Standard names are `DiffuseTexture`, `RoughnessTexture`, and `EmissiveTexture`. Absent authored slots are omitted. Imported paths use the existing editor convention `cooked/imported/<assetId>` without an extension. Explicit supplied cooked paths are preserved and traversal is rejected.
+
+The platform schema declares editor defaults and the cooker requires all selected shader/PBR/state fields. It does not manufacture a shader selection when the request omits one. Packaging retains its existing scene material paths (`cooked/<source-relative-path>`, commonly ending in `.hasset`); the WGPM magic/version identifies the payload. Standalone fixtures use `.wgpm`. This preserves the shared packaging path contract.

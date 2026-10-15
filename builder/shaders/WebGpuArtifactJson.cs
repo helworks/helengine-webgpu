@@ -30,10 +30,10 @@ internal static class WebGpuArtifactJson {
     }
 
     /// <summary>Requires a nonempty bounded identity, path or entry-point field.</summary>
-    internal static string Text(JsonElement value, string name) {
+    internal static string Text(JsonElement value, string name, int maximumLength = 4096) {
         if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(name, out JsonElement field)
             || field.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(field.GetString())
-            || field.GetString().Length > 4096 || field.GetString().Contains('\0')) {
+            || field.GetString().Length > maximumLength || field.GetString().Contains('\0')) {
             throw new InvalidDataException("WebGPU artifact is missing valid text field: " + name);
         }
         return field.GetString();

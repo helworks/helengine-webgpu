@@ -1,57 +1,84 @@
 using helengine.baseplatform.Requests;
-using helengine.baseplatform.Results;
+using helengine.webgpu.builder;
+using System.Buffers.Binary;
 
 namespace helengine.webgpu.builder.tests;
 
-/// <summary>Exercises actual material serialization and rejects incompatible authored shader requests.</summary>
+/// <summary>Checks authored shader selection, PBR constants, state and imported texture preservation.</summary>
 public sealed class WebGpuMaterialCookerTests {
-    /// <summary>Detects incorrect channel ordering, renderer selection, or external shader dependencies.</summary>
+    /// <summary>Colors and explicit shader identities survive the platform-owned material format.</summary>
     [Fact]
-    public void Solid_material_round_trips_with_webgpu_family() {
-        PlatformMaterialCookResult result = new WebGpuMaterialCooker().Cook(CreateRequest("#12345678", false));
-        using MemoryStream stream = new MemoryStream(result.CookedMaterialBytes);
-        PlatformMaterialAsset material = Assert.IsType<PlatformMaterialAsset>(helengine.files.AssetSerializer.Deserialize(stream));
-        Assert.Equal("cube-solid", material.Id);
-        Assert.Equal("webgpu", material.RendererFamilyId);
-        Assert.Equal(0x12, material.BaseColorR);
-        Assert.Equal(0x34, material.BaseColorG);
-        Assert.Equal(0x56, material.BaseColorB);
-        Assert.Equal(0x78, material.BaseColorA);
-        Assert.True(material.Lit);
-        Assert.Empty(result.ReferencedShaderDependencies);
+    public void Solid_material_round_trips_with_original_shader_selection() {
+        var fields = Fields(); fields["base-color"] = "#12345678";
+        var result = new WebGpuMaterialCooker().Cook(Request(fields));
+        var artifact = WebGpuMaterialArtifactSerializer.Deserialize(result.CookedMaterialBytes);
+        Assert.Equal("cube-solid", artifact.Metadata.GetProperty("materialAssetId").GetString());
+        Assert.Equal("ForwardStandardShader", artifact.Metadata.GetProperty("shaderAssetId").GetString());
+        byte[] color = Convert.FromBase64String(artifact.Metadata.GetProperty("constantBuffers").EnumerateArray().Single(value => value.GetProperty("name").GetString() == "BaseColorBuffer").GetProperty("data").GetString());
+        Assert.Equal(0x12 / 255f, BinaryPrimitives.ReadSingleLittleEndian(color));
+        Assert.Equal(0x78 / 255f, BinaryPrimitives.ReadSingleLittleEndian(color.AsSpan(12)));
+        Assert.Equal("default", Assert.Single(result.ReferencedShaderDependencies).VariantName);
     }
 
-    /// <summary>Rejects a custom shader instead of silently substituting the stock WGSL material.</summary>
+    /// <summary>Custom selections reach dependencies without being replaced by the built-in material.</summary>
     [Fact]
-    public void Custom_shader_is_rejected_with_asset_identity() {
-        NotSupportedException error = Assert.Throws<NotSupportedException>(() => new WebGpuMaterialCooker().Cook(CreateRequest("#ffffffff", true)));
-        Assert.Contains("cube-solid", error.Message);
+    public void Custom_shader_preserves_program_pair() {
+        var fields = Fields(); fields["use-custom-shader"] = "true"; fields["shader-asset-id"] = "custom";
+        fields["vertex-program"] = "custom.vs"; fields["pixel-program"] = "custom.ps";
+        var result = new WebGpuMaterialCooker().Cook(Request(fields));
+        Assert.Equal("custom", Assert.Single(result.ReferencedShaderDependencies).ShaderAssetId);
+        Assert.Equal("custom.vs", WebGpuMaterialArtifactSerializer.Deserialize(result.CookedMaterialBytes).Metadata.GetProperty("vertexProgram").GetString());
     }
 
-    /// <summary>Fails during cooking when a material requires the later textured-3D milestone.</summary>
+    /// <summary>PBR values, shadow flags, culling, blending and all standard texture slots remain explicit.</summary>
     [Fact]
-    public void Texture_requirement_is_rejected_before_native_build() {
-        PlatformMaterialCookRequest request = new("textured-cube", "materials/textured.hasset", "webgpu", "release", "webgpu", "standard-shader",
-            new Dictionary<string, string> { ["base-color"] = "#ffffffff", ["use-custom-shader"] = "false", ["casts-shadow"] = "false", ["receives-shadow"] = "false", ["texture-relative-path"] = "textures/checker.hasset" });
-        NotSupportedException error = Assert.Throws<NotSupportedException>(() => new WebGpuMaterialCooker().Cook(request));
-        Assert.Contains("textured-cube", error.Message); Assert.Contains("texture", error.Message);
+    public void Pbr_material_preserves_values_state_and_textures() {
+        var fields = Fields(); fields["roughness"] = "0.25"; fields["metallic"] = "0.75"; fields["specular"] = "0.6";
+        fields["emissive-color"] = "#80402080"; fields["casts-shadow"] = "true"; fields["receives-shadow"] = "true";
+        fields["double-sided"] = "true"; fields["alpha-mode"] = "alpha-blend"; fields["vertex-color-mode"] = "multiply"; fields["lighting-mode"] = "unlit";
+        fields["texture-id"] = "albedo"; fields["texture-relative-path"] = "cooked/imported/albedo";
+        fields["roughness-texture-id"] = "rough"; fields["emissive-texture-id"] = "emissive";
+        var artifact = WebGpuMaterialArtifactSerializer.Deserialize(new WebGpuMaterialCooker().Cook(Request(fields)).CookedMaterialBytes);
+        Assert.True(artifact.Metadata.GetProperty("castsShadows").GetBoolean()); Assert.True(artifact.Metadata.GetProperty("receivesShadows").GetBoolean());
+        var state = artifact.Metadata.GetProperty("renderState"); Assert.True(state.GetProperty("doubleSided").GetBoolean());
+        Assert.True(state.GetProperty("useVertexColor").GetBoolean()); Assert.False(state.GetProperty("lit").GetBoolean());
+        Assert.Equal("alpha-blend", state.GetProperty("alphaMode").GetString());
+        var textures = artifact.Metadata.GetProperty("textures").EnumerateArray().ToArray(); Assert.Equal(3, textures.Length);
+        Assert.Equal("cooked/imported/albedo", textures.Single(value => value.GetProperty("name").GetString() == "DiffuseTexture").GetProperty("path").GetString());
+        Assert.Equal("cooked/imported/rough", textures.Single(value => value.GetProperty("name").GetString() == "RoughnessTexture").GetProperty("path").GetString());
+        foreach (var buffer in artifact.Metadata.GetProperty("constantBuffers").EnumerateArray()) {
+            string name = buffer.GetProperty("name").GetString();
+            float first = BinaryPrimitives.ReadSingleLittleEndian(Convert.FromBase64String(buffer.GetProperty("data").GetString()));
+            if (name == "RoughnessBuffer") Assert.Equal(0.25f, first);
+            if (name == "MetallicBuffer") Assert.Equal(0.75f, first);
+            if (name == "SpecularBuffer") Assert.Equal(0.6f, first);
+        }
     }
 
-    /// <summary>Rejects malformed authored colors rather than manufacturing a fallback color.</summary>
+    /// <summary>Required shader selection cannot be manufactured when the caller omits it.</summary>
+    [Fact]
+    public void Missing_shader_selection_is_not_filled_with_a_fallback() {
+        var fields = Fields(); fields.Remove("shader-asset-id");
+        Assert.Contains("cube-solid", Assert.Throws<InvalidOperationException>(() => new WebGpuMaterialCooker().Cook(Request(fields))).Message);
+    }
+
+    /// <summary>Malformed authored colors fail with a diagnostic before native compilation.</summary>
     [Theory]
     [InlineData("#gggggg")]
     [InlineData("#12345")]
     [InlineData("")]
     public void Invalid_color_is_rejected(string color) {
-        Assert.Throws<InvalidOperationException>(() => new WebGpuMaterialCooker().Cook(CreateRequest(color, false)));
+        var fields = Fields(); fields["base-color"] = color;
+        Assert.Throws<InvalidOperationException>(() => new WebGpuMaterialCooker().Cook(Request(fields)));
     }
 
-    /// <summary>Creates a complete material input with literal, independently selected fields.</summary>
-    static PlatformMaterialCookRequest CreateRequest(string color, bool custom) {
-        return new PlatformMaterialCookRequest("cube-solid", "materials/rendering/cube_test/CubeTestSolid.hasset", "webgpu", "release", "webgpu", "standard-shader",
-            new Dictionary<string, string> {
-                ["base-color"] = color, ["use-custom-shader"] = custom.ToString(),
-                ["casts-shadow"] = "false", ["receives-shadow"] = "false"
-            });
-    }
+    /// <summary>Supplies independent literal values for every declared field.</summary>
+    internal static Dictionary<string, string> Fields() => new(StringComparer.Ordinal) {
+        ["shader-asset-id"] = "ForwardStandardShader", ["vertex-program"] = "ForwardStandardShader.vs", ["pixel-program"] = "ForwardStandardShader.ps", ["variant"] = "default",
+        ["use-custom-shader"] = "false", ["base-color"] = "#ffffffff", ["roughness"] = "0.4", ["metallic"] = "0", ["specular"] = "0.5", ["emissive-color"] = "#00000000",
+        ["casts-shadow"] = "false", ["receives-shadow"] = "false", ["double-sided"] = "false", ["alpha-mode"] = "opaque", ["lighting-mode"] = "lit", ["vertex-color-mode"] = "ignore",
+        ["texture-id"] = "", ["texture-relative-path"] = "", ["roughness-texture-id"] = "", ["emissive-texture-id"] = "", ["constant-buffers"] = "", ["depth-test"] = "true", ["depth-write"] = "true"
+    };
+    /// <summary>Uses the existing unmodified editor-to-builder request signature.</summary>
+    internal static PlatformMaterialCookRequest Request(IReadOnlyDictionary<string, string> fields) => new("cube-solid", "materials/cube.hasset", "webgpu", "release", "webgpu", "standard-shader", fields);
 }
