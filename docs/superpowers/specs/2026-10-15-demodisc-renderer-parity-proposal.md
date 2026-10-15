@@ -1,6 +1,6 @@
 # DemoDisc WebGPU completo — proposta de continuidade
 
-Estado: proposta para feedback de Helena; nenhuma alteração desta arquitetura foi implementada.
+Estado: aprovada por Helena em 2026-10-15 ("vai"). Escolha aprovada: depth textures e samplers de comparação nativos do WebGPU. A implementação desta etapa ainda não começou.
 
 ## Resultado já concreto
 
@@ -22,7 +22,7 @@ Inventário completo: `C:\dev\helworks\builds\helengine-webgpu\full-demodisc\sce
 4. Empacotar os módulos DemoDisc, TiltPlay, Zombislayer e Raytracing e exercitar splash→menu→loading→cada demo/jogo→retorno. Preservar o ray tracer por software e os uploads de textura que ele produz.
 5. Só ampliar a publicidade das capacidades do backend conforme os respectivos recursos forem implementados e validados. Um requisito não suportado permanece erro identificável durante a integração.
 
-## Escolha arquitetural que precisa de feedback: sombras
+## Escolha arquitetural aprovada: sombras
 
 O HLSL atual lê os mapas como texturas float comuns e faz a comparação de profundidade no shader. No DirectX11, o recurso é R32 typeless, com view de escrita D32_Float e view de leitura R32_Float. Essa combinação não deve ser copiada literalmente como um par de views WebGPU sem reconciliar o tipo do shader e do binding.
 
@@ -42,7 +42,11 @@ O WGSL define depth textures 2D/cube e samplers de comparação; o tipo do recur
 
 Manter as leituras float e a comparação no HLSL, produzindo um mapa de profundidade em um attachment de cor R32Float com o passe correspondente. Essa opção exige definir a escrita da profundidade explicitamente e validar a compatibilidade de amostragem/layout; não basta reaproveitar o resultado de cor de `ShadowDepthPS` como se fosse a profundidade do depth attachment.
 
-A proposta é seguir a primeira opção. Ela ainda depende de aprovação de Helena, conforme a regra de feedback arquitetural do AGENTS.md.
+A primeira opção foi aprovada por Helena em 2026-10-15. A alternativa de textura float de cor não foi escolhida.
+
+### Precisão obtida no mapeamento para implementação
+
+O atlas DirectX11 usa depth storage com view float. O cubemap DirectX11 tem um attachment de cor separado que recebe distância radial normalizada, além do depth attachment usado na rasterização (`EditorPointShadowDepth.hlsl` e `DirectX11PointShadowCubeResources.cs`). A descrição acima do recurso typeless se aplica ao atlas; não descreve a codificação radial do cubemap. No caminho WebGPU aprovado, o fragment shader do passe pontual escreve essa mesma distância radial em `SV_Depth`, para que a leitura com comparação do cubemap preserve a semântica existente. Atlas direcional/spot continua usando profundidade projetada. Os testes devem conferir ambas as codificações e as seis faces, sem tratar os dois passes como equivalentes.
 
 ## Critérios para concluir o DemoDisc
 
@@ -54,4 +58,4 @@ A proposta é seguir a primeira opção. Ela ainda depende de aprovação de Hel
 - Leitura numérica de pixels, estado do runtime e testes de fluxo comprovam os resultados; screenshots permanecem desautorizados.
 - Falhas de conversão são corrigidas no produtor, nunca nos arquivos gerados. O build oficial e o Build Waiter comprovam publicação fresca do pacote completo.
 
-O plano de implementação detalhado vem após o feedback sobre a escolha de sombras. Esta proposta não muda o escopo para apenas as cenas que já rodam.
+Plano detalhado: `C:\dev\helworks\helengine-webgpu\docs\superpowers\plans\2026-10-15-demodisc-renderer-parity.md`. Esta proposta não muda o escopo para apenas as cenas que já rodam.
