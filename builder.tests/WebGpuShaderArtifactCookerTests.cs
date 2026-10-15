@@ -77,6 +77,18 @@ public sealed class WebGpuShaderArtifactCookerTests : IDisposable {
         }
     }
 
+    /// <summary>Preserves standard material aliases actually emitted by the editor's existing packager.</summary>
+    [Theory]
+    [InlineData("default")]
+    [InlineData("Mesh")]
+    public void Cook_accepts_existing_standard_packager_variant_aliases(string variant) {
+        string path = "C:\\dev\\helworks\\helengine\\engine\\helengine.editor\\shaders\\builtin\\ForwardStandardShader.hlsl";
+        var request = Request([new PlatformShaderDependency("ForwardStandardShader", "ForwardStandardShader.vs", "ForwardStandardShader.ps", variant)],
+            "ForwardStandardShader", path, File.ReadAllText(path));
+        var declaration = Assert.Single(new WebGpuShaderArtifactCooker().Cook(request).CookedArtifactDeclarations);
+        Assert.Equal(variant, declaration.VariantId);
+    }
+
     /// <summary>Changing an active include invalidates the cooked shader content without changing its logical path.</summary>
     [Fact]
     public void Cook_recompiles_after_include_change_and_preserves_last_valid_output_on_failure() {

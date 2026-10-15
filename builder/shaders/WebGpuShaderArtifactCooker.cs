@@ -70,7 +70,11 @@ public sealed class WebGpuShaderArtifactCooker {
     static StandardShaderVariant ResolveVariant(PlatformShaderDependency dependency, PlatformShaderArtifactCookSource source) {
         IReadOnlyList<StandardShaderVariant> variants;
         string programPrefix;
-        if (dependency.ShaderAssetId == "ForwardStandardShader") { variants = StandardShaderVariants.All; programPrefix = dependency.ShaderAssetId; }
+        if (dependency.ShaderAssetId == "ForwardStandardShader") {
+            // The editor's shared standard material packaging also emits its existing default/Mesh aliases.
+            variants = StandardShaderVariants.All.Concat([new StandardShaderVariant("default", "VS", "PS", []), new StandardShaderVariant("Mesh", "VS", "PS", [])]).ToArray();
+            programPrefix = dependency.ShaderAssetId;
+        }
         else if (dependency.ShaderAssetId == "SpriteBatchShader") { variants = SpriteBatchShaderVariants.All; programPrefix = dependency.ShaderAssetId; }
         else {
             // ShaderPackageBuilder defines custom source packages with file-name programs, VS/PS entries and default variant.
