@@ -5,6 +5,7 @@
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
     <NuGetAudit>false</NuGetAudit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

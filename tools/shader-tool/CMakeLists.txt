@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.26)
+project(HelEngineWebGpuShaderTool LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(NOT EXISTS "${DAWN_SOURCE_ROOT}/CMakeLists.txt" OR NOT EXISTS "${SHADER_TOOL_ROOT}/include/nlohmann/json.hpp")
+    message(FATAL_ERROR "Run scripts/setup-shader-toolchain.ps1 before configuring the shader tool.")
+endif()
+foreach(option DAWN_ENABLE_D3D11 DAWN_ENABLE_D3D12 DAWN_ENABLE_METAL DAWN_ENABLE_NULL
+    DAWN_ENABLE_DESKTOP_GL DAWN_ENABLE_OPENGLES DAWN_ENABLE_VULKAN DAWN_ENABLE_WEBGPU_ON_WEBGPU
+    DAWN_USE_GLFW DAWN_BUILD_SAMPLES DAWN_BUILD_TESTS DAWN_BUILD_PROTOBUF DAWN_BUILD_BENCHMARKS
+    DAWN_BUILD_FUZZERS DAWN_FETCH_DEPENDENCIES TINT_BUILD_TESTS TINT_BUILD_BENCHMARKS
+    TINT_BUILD_FUZZERS TINT_BUILD_CMD_TOOLS TINT_BUILD_IR_BINARY TINT_BUILD_GLSL_WRITER
+    TINT_BUILD_GLSL_VALIDATOR TINT_BUILD_HLSL_WRITER TINT_BUILD_MSL_WRITER TINT_BUILD_SPV_WRITER
+    TINT_BUILD_NULL_WRITER)
+    set(${option} OFF CACHE BOOL "Shader adapter only" FORCE)
+endforeach()
+set(DAWN_BUILD_MONOLITHIC_LIBRARY OFF CACHE STRING "Shader adapter only" FORCE)
+set(TINT_BUILD_SPV_READER ON CACHE BOOL "SPIR-V input" FORCE)
+set(TINT_BUILD_WGSL_READER ON CACHE BOOL "Final program reflection" FORCE)
+set(TINT_BUILD_WGSL_WRITER ON CACHE BOOL "Browser output" FORCE)
+add_subdirectory("${DAWN_SOURCE_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/dawn" EXCLUDE_FROM_ALL)
+add_executable(helengine-webgpu-shader main.cpp)
+target_include_directories(helengine-webgpu-shader PRIVATE "${DAWN_SOURCE_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/dawn" "${SHADER_TOOL_ROOT}/include")
+target_link_libraries(helengine-webgpu-shader PRIVATE tint_api tint_lang_wgsl_reader tint_lang_wgsl_inspector)
+set_target_properties(helengine-webgpu-shader PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE "${SHADER_TOOL_ROOT}/bin")

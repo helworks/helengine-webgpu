@@ -5,12 +5,18 @@
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
     <NuGetAudit>false</NuGetAudit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <HelEngineRoot Condition="'$(HelEngineRoot)' == ''">..\..\helengine</HelEngineRoot>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Silk.NET.Shaderc" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Shaderc.Native" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.SPIRV.Cross" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.SPIRV.Cross.Native" Version="2.21.0" />
     <InternalsVisibleTo Include="helengine.webgpu.builder.tests" />
     <ProjectReference Include="$(HelEngineRoot)\engine\helengine.baseplatform\helengine.baseplatform.csproj" />
     <ProjectReference Include="$(HelEngineRoot)\engine\helengine.core\helengine.core.csproj" />
     <ProjectReference Include="$(HelEngineRoot)\engine\helengine.files\helengine.files.csproj" />
+    <ProjectReference Include="$(HelEngineRoot)\engine\helengine.shader.compilation\helengine.shader.compilation.csproj" />
   </ItemGroup>
 </Project>
