@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { invalidateShader } = require('./cooked-shader-corruption');
 test('cube_test reports WebGPU absence on the exported page', async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(navigator, 'gpu', { value: undefined }));
   await page.goto('http://127.0.0.1:8197/game/');
@@ -15,14 +16,23 @@ test('cube_test reports missing WASM instead of claiming running', async ({ page
 test('cube_test surfaces invalid WGSL as a terminal runtime error', async ({ page }) => {
   await page.route('**/helengine_webgpu.data', async route => {
     const response = await route.fetch(); const bytes = await response.body();
-    const marker = Buffer.from('@vertex fn vs_main'); const offset = bytes.indexOf(marker);
-    expect(offset).toBeGreaterThanOrEqual(0);
-    bytes[offset + 8] = 'x'.charCodeAt(0);
-    await route.fulfill({ response, body: bytes });
+    await route.fulfill({ response, body: invalidateShader(bytes) });
   });
   await page.goto('http://127.0.0.1:8197/game/');
   await expect(page.locator('#helengine-error')).toBeVisible();
   await expect(page.locator('#helengine-error')).toContainText(/WebGPU|shader|WGSL/i);
+  await expect(page.locator('#helengine-status')).toHaveText('Stopped');
+});
+
+test('cube_test stops when a required cooked UI shader is missing', async ({ page }) => {
+  await page.route('**/helengine_webgpu.js', async route => {
+    const response = await route.fetch(); const text = await response.text();
+    const shader = '6941bd67df7d7e8d2fabfd2afe995f690064fa40230513d355140130d2b627c8.wgsp';
+    expect(text).toContain(shader);
+    await route.fulfill({ response, body: text.replaceAll(shader, '0' + shader.slice(1)) });
+  });
+  await page.goto('http://127.0.0.1:8197/game/');
+  await expect(page.locator('#helengine-error')).toContainText(/Missing WebGPU artifact/i);
   await expect(page.locator('#helengine-status')).toHaveText('Stopped');
 });
 test('cube_test loads authored scene and runs converted C# spin', async ({ page }) => {
