@@ -1,7 +1,7 @@
 # DemoDisc no navegador: shaders pelo pipeline compartilhado
 
 Data: 2026-10-14
-Estado: proposta escrita para revisão de Helena; implementação ainda não iniciada.
+Estado: design escrito aprovado por Helena em 2026-10-14; plano de implementação escrito, aguardando revisão.
 
 ## Objetivo e decisões recebidas
 
