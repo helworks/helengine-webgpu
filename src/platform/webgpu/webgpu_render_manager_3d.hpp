@@ -11,6 +11,7 @@
 namespace helengine::webgpu {
 class WebGpuRenderManager2D;
 class WebGpuShadowRenderer;
+class WebGpuRuntimeMaterial;
 /// Draws the engine's ordered camera queues using a basic lit WebGPU mesh pipeline.
 class WebGpuRenderManager3D : public RenderManager3D, public IRenderVisitor3D {
 public:
@@ -50,5 +51,9 @@ private:
     ArtifactJson ShadowValues;
     std::unique_ptr<WebGpuShadowRenderer> Shadows;
     WebGpuPipelineTarget ActiveTarget;
+    /// Owns the original desktop missing-material shader used by unbound mesh slots.
+    std::unique_ptr<WebGpuRuntimeMaterial> MissingMaterial;
+    /// Loads the declared source-cooked built-in shader once for this renderer.
+    WebGpuRuntimeMaterial* GetMissingMaterial();
 };
 }

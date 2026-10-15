@@ -8,6 +8,7 @@
 #include "IRenderQueue3D.hpp"
 #include "RuntimeSubmesh.hpp"
 #include "ModelPrimitiveTopology.hpp"
+#include "webgpu_submesh_material.hpp"
 #include <stdexcept>
 namespace helengine::webgpu {
 void WebGpuShadowCasterCollector::Visit(IDrawable3D* drawable) {
@@ -15,10 +16,13 @@ void WebGpuShadowCasterCollector::Visit(IDrawable3D* drawable) {
     auto* model=dynamic_cast<WebGpuRuntimeModel*>(drawable->get_Model()); if(!model) throw std::runtime_error("Shadow caster requires a WebGPU runtime model");
     auto* ranges=model->get_Submeshes(); auto* materials=drawable->get_Materials(); int count=ranges && ranges->Length?ranges->Length:1;
     for(int index=0;index<count;++index) {
-        if(!materials || index>=materials->Length || !(*materials)[index]) throw std::runtime_error("Shadow caster submesh has no material");
-        auto* material=dynamic_cast<WebGpuRuntimeMaterial*>((*materials)[index]->ResolveRootMaterial());
-        if(!material) throw std::runtime_error("Shadow caster requires a WebGPU runtime material");
-        if(!material->get_CastsShadows() || material->Artifact.Metadata.at("renderState").at("alphaMode")!="opaque") continue;
+        int materialIndex=ResolveSubmeshMaterialIndex(index,materials?materials->Length:0);
+        auto* authored=materialIndex>=0?(*materials)[materialIndex]:nullptr;
+        if(authored) {
+            auto* material=dynamic_cast<WebGpuRuntimeMaterial*>(authored->ResolveRootMaterial());
+            if(!material) throw std::runtime_error("Shadow caster requires a WebGPU runtime material");
+            if(!material->get_CastsShadows() || material->Artifact.Metadata.at("renderState").at("alphaMode")!="opaque") continue;
+        }
         auto* range=ranges && ranges->Length?(*ranges)[index]:nullptr; if(range && range->PrimitiveTopology!=ModelPrimitiveTopology::TriangleList) continue;
         WebGpuShadowCaster caster; caster.Vertices=model->Vertices; caster.Indices=model->Indices; caster.First=range?range->IndexStart:0;
         caster.Count=range?range->IndexCount:model->Indices?model->IndexCount:model->VertexCount; caster.World=drawable->get_Parent()->get_WorldTransformMatrix(); Casters.push_back(caster);

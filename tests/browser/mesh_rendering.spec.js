@@ -1,3 +1,4 @@
+const {openCube}=require('./demodisc-controls');
 const { test, expect } = require('@playwright/test');
 const { readback } = require('./render-readback');
 test('mesh_rendering repeated draws reuse buffers textures and pipelines', async ({ page }) => {
@@ -18,7 +19,7 @@ test('mesh_rendering repeated draws reuse buffers textures and pipelines', async
       return adapter;
     };
   });
-  await page.goto('http://127.0.0.1:8197/game/');
+  await openCube(page);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0)).toBeGreaterThan(30);
   const before = await page.evaluate(() => ({ counts: window.gpuAllocations, frame: window.helengineDiagnostics.frames }));
   expect(before.counts.createBuffer).toBeGreaterThan(0);
@@ -30,7 +31,7 @@ test('mesh_rendering repeated draws reuse buffers textures and pipelines', async
 test('mesh_rendering draws shaded geometry and the authored UI into real GPU pixels', async ({ page }) => {
   const gpuErrors = [];
   page.on('console', message => { if (/validation|invalid|shader.*error/i.test(message.text())) gpuErrors.push(message.text()); });
-  await page.goto('http://127.0.0.1:8197/game/');
+  await openCube(page);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0)).toBeGreaterThan(5);
   const pixels = await readback(page);
   expect(pixels.background).toEqual([100, 149, 237, 255]);
@@ -40,7 +41,7 @@ test('mesh_rendering draws shaded geometry and the authored UI into real GPU pix
   expect(gpuErrors).toEqual([]);
 });
 test('mesh_rendering directional lighting changes with converted cube rotation', async ({ page }) => {
-  await page.goto('http://127.0.0.1:8197/game/');
+  await openCube(page);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0)).toBeGreaterThan(5);
   const brightness = [];
   for (let i = 0; i < 8; i++) { brightness.push((await readback(page)).center[0]); await page.waitForTimeout(120); }

@@ -6,6 +6,7 @@
 #include "webgpu_shadow_renderer.hpp"
 #include "webgpu_render_target.hpp"
 #include "webgpu_camera_target.hpp"
+#include "webgpu_submesh_material.hpp"
 #include "AssetSerializer.hpp"
 #include "Core.hpp"
 #include "ObjectManager.hpp"
@@ -54,6 +55,16 @@ void FloatMember(const ArtifactJson& member, const float4& value, std::span<std:
 }
 WebGpuRenderManager3D::WebGpuRenderManager3D(WebGpuFrame& frame) : Frame(frame),Shadows(std::make_unique<WebGpuShadowRenderer>(frame)) {}
 WebGpuRenderManager3D::~WebGpuRenderManager3D() = default;
+WebGpuRuntimeMaterial* WebGpuRenderManager3D::GetMissingMaterial() {
+    if(!MissingMaterial) {
+        auto material=std::make_unique<WebGpuRuntimeMaterial>();
+        material->Program=Frame.Shaders->Load(ShaderArtifactPath({{"shaderAssetId","MissingMaterial"},{"vertexProgram","MissingMaterial.vs"},{"pixelProgram","MissingMaterial.ps"},{"variant","default"}}));
+        material->Artifact.Metadata=ArtifactJson({{"textures",ArtifactJson::array()},{"renderState",{{"alphaMode","opaque"},{"doubleSided",false},{"depthTest",true},{"depthWrite",true},{"lit",false},{"useVertexColor",false}}}});
+        material->set_CastsShadows(true); material->set_ReceivesShadows(false);
+        MissingMaterial=std::move(material);
+    }
+    return MissingMaterial.get();
+}
 RenderTarget* WebGpuRenderManager3D::CreateRenderTarget(int32_t width,int32_t height) {return new WebGpuRenderTarget(Frame,width,height);}
 RuntimeModel* WebGpuRenderManager3D::BuildModelFromRaw(ModelAsset* data) {
     if (!data || !data->Positions || !data->Normals || !data->Positions->Length || data->Positions->Length != data->Normals->Length) throw std::runtime_error("WebGPU mesh requires matching nonempty positions and normals");
@@ -112,7 +123,7 @@ RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path
     Frame.Shaders->Pipeline(*material->Program,false,metadata.at("renderState"));
     return material.release();
 }
-RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, 4, 4); }
+RendererBackendCapabilityProfile* WebGpuRenderManager3D::GetCapabilityProfile() { return new RendererBackendCapabilityProfile(true, false, false, false, WebGpuLightState::MaximumVisibleLights, 4); }
 void WebGpuRenderManager3D::Draw() {
     Core* core = get_OwnerCore();
     if (!core) throw std::runtime_error("WebGPU renderer has no owning core");
@@ -134,7 +145,7 @@ void WebGpuRenderManager3D::Draw() {
         float4x4::CreateLookAt__ref0_ref1_ref2_out3(position, target, up, view);
         projection = CameraProjectionUtils::CreateProjection(camera, width / height);
         float4x4::Multiply__ref0_ref1_out2(view, projection, ViewProjection);
-        Lights.Prepare(core,camera,std::min(get_MaximumVisibleLights(),4));
+        Lights.Prepare(core,camera,std::min(get_MaximumVisibleLights(),WebGpuLightState::MaximumVisibleLights));
         ForwardValues=Lights.ForwardValues();
         ShadowPlan.Prepare(camera,Lights,get_ShadowsEnabled()?4:0);
         Shadows->Render(camera,ShadowPlan);
@@ -169,9 +180,11 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
     wgpuRenderPassEncoderSetVertexBuffer(Pass, 0, model->Vertices, 0, WGPU_WHOLE_SIZE);
     if (model->Indices) wgpuRenderPassEncoderSetIndexBuffer(Pass, model->Indices, WGPUIndexFormat_Uint32, 0, WGPU_WHOLE_SIZE);
     for (int32_t i = 0; i < count; ++i) {
-        if (!materials || i >= materials->Length || !(*materials)[i]) throw std::runtime_error("Mesh submesh has no cooked material");
-        auto* material = static_cast<WebGpuRuntimeMaterial*>((*materials)[i]->ResolveRootMaterial());
-        if(material->ShadowResourceGeneration!=Shadows->ResourceGeneration || material->UniformGeneration!=Frame.UniformGeneration) {
+        int materialIndex=ResolveSubmeshMaterialIndex(i,materials?materials->Length:0);
+        auto* authored=materialIndex>=0?(*materials)[materialIndex]:nullptr;
+        auto* material=authored?dynamic_cast<WebGpuRuntimeMaterial*>(authored->ResolveRootMaterial()):GetMissingMaterial();
+        if(!material) throw std::runtime_error("Mesh material requires a WebGPU runtime material");
+        if(!material->Binding || material->ShadowResourceGeneration!=Shadows->ResourceGeneration || material->UniformGeneration!=Frame.UniformGeneration) {
             auto views=material->TextureViews; for(auto& pair:Shadows->TextureBindings()) views.insert_or_assign(pair.first,pair.second);
             auto binding=Frame.Shaders->CreateBinding(*material->Program,views); if(material->Binding) wgpuBindGroupRelease(material->Binding); material->Binding=binding; material->ShadowResourceGeneration=Shadows->ResourceGeneration; material->UniformGeneration=Frame.UniformGeneration;
         }
@@ -183,11 +196,15 @@ void WebGpuRenderManager3D::Visit(IDrawable3D* drawable) {
         for (auto& binding:program.Artifact.Metadata.at("bindings")) {
             if(binding.at("class")!="constant-buffer") continue;
             std::string name=binding.at("name");
-            if(name!="TransformBuffer" && name!="ForwardLightBuffer" && name!="ShadowBuffer") continue;
+            bool missing=material==MissingMaterial.get();
+            if(!missing && name!="TransformBuffer" && name!="ForwardLightBuffer" && name!="ShadowBuffer") continue;
             auto& bytes=constants[name]; bytes.assign(binding.at("sourceLayout").at("size").get<size_t>(),std::byte{});
             for(auto& member:binding.at("sourceLayout").at("members")) {
                 std::string field=member.at("name");
-                if(name=="TransformBuffer") {
+                if(missing) {
+                    if(field!="worldViewProj") throw std::runtime_error("Unknown required missing-material member: "+field);
+                    WriteEngineMatrix(member,reinterpret_cast<const float*>(&mvp),bytes);
+                } else if(name=="TransformBuffer") {
                     if(field=="world") WriteEngineMatrix(member,reinterpret_cast<const float*>(&world),bytes);
                     else if(field=="worldViewProj") WriteEngineMatrix(member,reinterpret_cast<const float*>(&mvp),bytes);
                     else if(field=="normalMatrix") WriteEngineMatrix(member,reinterpret_cast<const float*>(&normal),bytes);

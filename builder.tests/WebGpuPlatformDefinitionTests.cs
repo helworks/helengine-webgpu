@@ -5,6 +5,15 @@ namespace helengine.webgpu.builder.tests;
 
 /// <summary>Protects the platform metadata consumed by editor cooking and generated gameplay.</summary>
 public sealed class WebGpuPlatformDefinitionTests {
+    /// <summary>Implemented light families must survive scene cooking rather than the obsolete Cube-only platform rules.</summary>
+    [Theory]
+    [InlineData("helengine.directionallightcomponent")]
+    [InlineData("helengine.pointlightcomponent")]
+    [InlineData("helengine.spotlightcomponent")]
+    public void Implemented_light_families_pass_through_packaging(string component) {
+        var definition=WebGpuPlatformDefinitionFactory.Create();
+        Assert.Equal(PlatformComponentSupportKind.PassThrough,definition.ComponentSupportRules.Single(value=>value.ComponentTypeId==component).SupportKind);
+    }
     /// <summary>The editor's declared defaults form a complete cook request with explicit shader selection.</summary>
     [Fact]
     public void Schema_defaults_supply_the_complete_shared_material_contract() {

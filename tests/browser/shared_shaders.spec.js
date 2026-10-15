@@ -1,8 +1,9 @@
+const {openCube}=require('./demodisc-controls');
 const { test, expect } = require('@playwright/test');
 const { readback } = require('./render-readback');
 
 test('shared shaders load both original UI variants and the authored Forward selection', async ({ page }) => {
-  await page.goto('http://127.0.0.1:8197/game/');
+  await openCube(page);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0), { timeout: 60000 }).toBeGreaterThan(5);
   const selections = await page.evaluate(() => window.helengineShaderDiagnostics);
   expect(selections.some(s => s.shaderAssetId === 'SpriteBatchShader' && s.variant === 'Textured')).toBe(true);
@@ -39,7 +40,7 @@ test('WGPM alpha culling and depth state reach the actual engine RuntimeMaterial
     }
     await route.fulfill({ response, body: bytes });
   });
-  await page.goto('http://127.0.0.1:8197/game/');
+  await openCube(page);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0)).toBeGreaterThan(3);
   expect(await page.evaluate(() => window.helengineMaterialDiagnostics))
     .toContainEqual({ materialAssetId: 'state-fixture', blendMode: 1, cullMode: 0, depthTest: false, depthWrite: false });

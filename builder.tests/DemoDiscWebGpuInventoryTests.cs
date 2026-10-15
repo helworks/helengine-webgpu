@@ -19,6 +19,8 @@ public sealed class DemoDiscWebGpuInventoryTests {
         string[] expected=Directory.GetFiles(Path.Combine(root,"scenes"),"*.helen",SearchOption.AllDirectories)
             .Select(path=>Path.GetRelativePath(root,path).Replace('\\','/')).Where(path=>path!="scenes/DemoDiscMainMenuHandheld.helen" && path!="scenes/games/tilt/tilt_trial_ds.helen").Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(37,expected.Length); Assert.Equal(expected,selected.Order(StringComparer.Ordinal)); Assert.Equal("scenes/HelenOfCodeSplash.helen",selected[0]);
+        var orders=platform.GetProperty("sceneOrders");Assert.Equal(37,orders.GetArrayLength());
+        Assert.Equal("scenes/HelenOfCodeSplash.helen",orders[0].GetProperty("sceneReference").GetProperty("relativePath").GetString());Assert.Equal(1,orders[0].GetProperty("orderNumber").GetInt32());
         using JsonDocument groups=JsonDocument.Parse(File.ReadAllText(Path.Combine(ProjectRoot,"settings/platform-groups.json")));
         Assert.Contains(groups.RootElement.GetProperty("groups").EnumerateArray().Single(value=>value.GetProperty("id").GetString()=="hd").GetProperty("platformIds").EnumerateArray(),value=>value.GetString()=="webgpu");
     }
@@ -50,5 +52,10 @@ public sealed class DemoDiscWebGpuInventoryTests {
         string source=File.ReadAllText(Path.Combine(ProjectRoot,"assets/codebase/menu.authoring/DemoDiscSceneCatalog.cs"));
         foreach(string path in Directory.GetFiles(Path.Combine(ProjectRoot,"assets/scenes/physics"),"*.helen")) Assert.Contains('"'+Path.GetFileNameWithoutExtension(path)+'"',source);
         Assert.Contains("CreateDesktopPhysicsSceneEntries",source); Assert.Contains("\"zombislayer\"",source);
+        using JsonDocument audit=JsonDocument.Parse(File.ReadAllText(AuditPath));
+        var baked=audit.RootElement.GetProperty("bakedMenu").EnumerateArray().ToArray();
+        foreach(string path in Directory.GetFiles(Path.Combine(ProjectRoot,"assets/scenes/physics"),"*.helen"))
+            Assert.Single(baked.Where(item=>item.GetProperty("targetId").GetString()==Path.GetFileNameWithoutExtension(path)));
+        Assert.Single(baked.Where(item=>item.GetProperty("targetId").GetString()=="zombislayer"));
     }
 }

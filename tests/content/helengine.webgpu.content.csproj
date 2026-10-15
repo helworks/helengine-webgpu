@@ -10,5 +10,8 @@
     <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/MenuItemDefinition.cs" Link="original/MenuItemDefinition.cs" />
     <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu.authoring/MenuActionDefinition.cs" Link="original/MenuActionDefinition.cs" />
     <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu/MenuActionKind.cs" Link="original/MenuActionKind.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/rendering/DemoDiscLightToggleComponent.cs" Link="original/DemoDiscLightToggleComponent.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/rendering/DemoDiscDirectionalLightToggleState.cs" Link="original/DemoDiscDirectionalLightToggleState.cs" />
+    <Compile Include="C:/dev/helprojs/demodisc/assets/codebase/menu/DemoDiscGamepadInput.cs" Link="original/DemoDiscGamepadInput.cs" />
   </ItemGroup>
 </Project>

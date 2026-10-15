@@ -1,5 +1,6 @@
 #include "platform/webgpu/webgpu_light_state.hpp"
 #include "platform/webgpu/webgpu_shadow_plan.hpp"
+#include "platform/webgpu/webgpu_submesh_material.hpp"
 #include <emscripten.h>
 #include <cmath>
 #include <stdexcept>
@@ -8,6 +9,9 @@ using namespace helengine::webgpu;
 void Require(bool value) { if (!value) throw std::runtime_error("Light/shadow planning assertion failed"); }
 int main() {
     try {
+        Require(ResolveSubmeshMaterialIndex(0,2)==0 && ResolveSubmeshMaterialIndex(1,2)==1 && ResolveSubmeshMaterialIndex(2,2)==0 && ResolveSubmeshMaterialIndex(7,1)==0);
+        Require(ResolveSubmeshMaterialIndex(0,0)==-1);
+        bool negativeRejected=false;try{ResolveSubmeshMaterialIndex(-1,1);}catch(const std::runtime_error&){negativeRejected=true;}Require(negativeRejected);
         WebGpuLightRecord ambient{}; ambient.Type=3; ambient.Color=float4(0.2f,0.4f,0.6f,1); ambient.Intensity=2;
         WebGpuLightRecord directional{}; directional.Direction=float3(0,0,-1); directional.ShadowsEnabled=true; directional.ShadowDistance=30;
         WebGpuLightRecord point{}; point.Type=1; point.Position=float3(1,2,3); point.Range=20; point.ShadowsEnabled=true;
@@ -39,6 +43,8 @@ int main() {
         plan.PrepareForCamera(float3(0,0,0),float3(0,0,-1),lights,0); Require(plan.Entries.empty());
         point.Enabled=true; directional.Intensity=3; point.Intensity=2; spot.LayerMask=1;
         lights.PrepareRecords({point,spot,directional,directional,point},4,1); Require(lights.Slots.size()==4 && lights.Slots[0].Intensity==3);
+        lights.PrepareRecords({directional,directional,point,spot,ambient},WebGpuLightState::MaximumVisibleLights,1);
+        values=lights.ForwardValues(); Require(lights.Slots.size()==4); Require(values.at("ambientLightColor")[0]==0.4f);
         EM_ASM({if(typeof window!=='undefined')window['lightStateChecks']='passed';}); std::cout<<"Light/shadow planning checks passed\n"; return 0;
     } catch(const std::exception& error) { EM_ASM({if(typeof window!=='undefined')window['lightStateChecks']=UTF8ToString($0);},error.what()); std::cerr<<error.what()<<'\n'; return 1; }
 }

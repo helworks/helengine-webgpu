@@ -18,7 +18,9 @@ public sealed class WebGpuBuildFixture {
         var dependencies = new WebGpuPlatformAssetBuilder().RendererShaderDependencies;
         List<PlatformShaderArtifactCookSource> sources = [];
         foreach (string asset in dependencies.Select(value => value.ShaderAssetId).Distinct(StringComparer.Ordinal)) {
-            string path = "C:/dev/helworks/helengine/engine/helengine.editor/shaders/builtin/" + asset + ".hlsl";
+            string path = asset == "MissingMaterial"
+                ? "C:/dev/helworks/helengine/engine/helengine.directx11/shaders/MissingMaterial.fx"
+                : "C:/dev/helworks/helengine/engine/helengine.editor/shaders/builtin/" + asset + ".hlsl";
             string text = File.ReadAllText(path);
             sources.Add(new PlatformShaderArtifactCookSource(asset, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))), text, path));
         }

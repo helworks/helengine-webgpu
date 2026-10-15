@@ -24,6 +24,9 @@ private:
     KeyboardState Keyboard;
     /// Holds mouse buttons, scaled position and cumulative wheel values.
     MouseState Mouse;
+    /// Alternates borrowed snapshots so the engine retains previous-frame button edges.
+    Array<InputGamepadState>* GamepadFrames[2] = {};
+    unsigned GamepadFrame = 0;
     /// Stores the background capture policy.
     bool Background = false;
     /// Applies one key event without synthesizing repeat presses.

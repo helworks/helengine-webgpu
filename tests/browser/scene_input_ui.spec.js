@@ -1,7 +1,8 @@
+const {openCube}=require('./demodisc-controls');
 const { test, expect } = require('@playwright/test');
 const { readback } = require('./render-readback');
 async function running(page) {
-  await page.goto('http://127.0.0.1:8197/game/');
+  await openCube(page);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0)).toBeGreaterThan(5);
 }
 test('scene_input_ui resize retains actual rendered text and panel output', async ({ page }) => {

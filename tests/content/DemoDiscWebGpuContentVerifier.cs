@@ -35,10 +35,27 @@ public static class DemoDiscWebGpuContentVerifier {
         if(!preserved) throw new InvalidDataException("An existing WebGPU material override changed during preparation");
         string[] runtimeModules=Directory.GetFiles(Path.Combine(projectRoot,"assets/codebase"),"code.module.json",SearchOption.AllDirectories).Select(path=>JsonNode.Parse(File.ReadAllText(path)))
             .Where(value=>(string)value["moduleKind"]=="runtime").Select(value=>(string)value["moduleId"]).Order(StringComparer.Ordinal).ToArray();
-        var audit=new {ProjectRoot=projectRoot,Applied=apply,Scenes=scenes,ChangedFiles=changed,ExistingOverridesPreserved=preserved,RuntimeModules=runtimeModules,Gallery=gallery,Materials=materialAudit,Menu=VerifyMenu(),
+        var audit=new {ProjectRoot=projectRoot,Applied=apply,Scenes=scenes,ChangedFiles=changed,ExistingOverridesPreserved=preserved,RuntimeModules=runtimeModules,Gallery=gallery,Materials=materialAudit,Menu=VerifyMenu(),BakedMenu=ReadBakedMenu(projectRoot),
             RuntimeRequirementEvidence="Read expanded scene/module/runtime requirements from the official export manifest; raw inventory physicsFlags are not used."};
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath));File.WriteAllText(reportPath,JsonSerializer.Serialize(audit,JsonOptions),new UTF8Encoding(false));
         Console.WriteLine($"Desktop scenes={scenes.Length}; materials={materialAudit.Count}; gallery={gallery.Count}; proposed changes={changed.Length}; applied={apply}; report={reportPath}");
+    }
+
+    /// <summary>Checks the persisted scene metadata consumed by the runtime, independently of the source catalog.</summary>
+    static object[] ReadBakedMenu(string root) {
+        using var stream=File.OpenRead(Path.Combine(root,"assets/scenes/DemoDiscMainMenu.helen"));
+        var scene=(SceneAsset)helengine.files.EditorAssetBinarySerializer.Deserialize(stream);
+        List<object> entries=[];
+        void Visit(SceneEntityAsset entity) {
+            foreach(var component in entity.Components) if(component.ComponentTypeId=="DemoDisc.menu.MenuItemComponent, DemoDisc") {
+                var fields=new EditorTaggedSceneComponentFieldReader(component.Payload);
+                string Read(string name) {if(!fields.TryGetFieldReader(name,out var reader)) throw new InvalidDataException("Missing baked menu field "+name);using(reader) return reader.ReadString();}
+                entries.Add(new {PanelId=Read("PanelId"),ItemId=Read("ItemId"),TargetId=Read("TargetId")});
+            }
+            foreach(var child in entity.Children) Visit(child);
+        }
+        foreach(var entity in scene.RootEntities) Visit(entity);
+        return entries.ToArray();
     }
 
     /// <summary>Selects all authored desktop scenes using their existing stable references and makes splash the startup entry.</summary>
@@ -50,13 +67,14 @@ public static class DemoDiscWebGpuContentVerifier {
         string path=Path.Combine(root,"settings/build_config.json");JsonNode document=JsonNode.Parse(File.ReadAllText(path));
         Dictionary<string,JsonNode> references=new(StringComparer.Ordinal);
         foreach(JsonNode platform in document["platforms"].AsArray()) foreach(JsonNode reference in platform["selectedSceneReferences"].AsArray()) references.TryAdd((string)reference["relativePath"],reference);
-        JsonNode browser=document["platforms"].AsArray().Single(value=>(string)value["platformId"]=="webgpu"); JsonArray selected=new();
+        JsonNode browser=document["platforms"].AsArray().Single(value=>(string)value["platformId"]=="webgpu"); JsonArray selected=new();JsonArray orders=new();
         string[] ordered=scenes.OrderBy(scene=>scene=="scenes/HelenOfCodeSplash.helen"?0:scene=="scenes/DemoDiscMainMenu.helen"?1:scene=="scenes/SceneLoadingScreen.helen"?2:3).ThenBy(scene=>scene,StringComparer.Ordinal).ToArray();
         foreach(string scene in ordered) {
             if(!references.TryGetValue(scene,out JsonNode original)) throw new InvalidDataException("No existing stable authored reference for "+scene);
             JsonNode reference=original.DeepClone();reference["contentHash"]="sha256:"+Hash(Path.Combine(assets,scene));selected.Add(reference);
+            orders.Add(new JsonObject { ["sceneReference"]=reference.DeepClone(),["orderNumber"]=selected.Count });
         }
-        browser["selectedSceneReferences"]=selected;browser["sceneOrders"]=new JsonArray();browser["overridesProjectScenes"]=true;
+        browser["selectedSceneReferences"]=selected;browser["sceneOrders"]=orders;browser["overridesProjectScenes"]=true;
         proposed[path]=Encoding.UTF8.GetBytes(document.ToJsonString(JsonOptions));return ordered;
     }
 

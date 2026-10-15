@@ -1,3 +1,4 @@
+const {openCube}=require('./demodisc-controls');
 const { test, expect } = require('@playwright/test');
 const { invalidateShader } = require('./cooked-shader-corruption');
 test('cube_test reports WebGPU absence on the exported page', async ({ page }) => {
@@ -38,7 +39,7 @@ test('cube_test stops when a required cooked UI shader is missing', async ({ pag
 test('cube_test loads authored scene and runs converted C# spin', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  const response = await page.goto('http://127.0.0.1:8197/game/');
+  const response = await openCube(page);
   expect(response.status()).toBe(200);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0), { timeout: 30000 }).toBeGreaterThan(5);
   expect(await page.evaluate(() => window.helengineDiagnostics.sceneIds)).toContain('cube_test');
@@ -48,7 +49,7 @@ test('cube_test loads authored scene and runs converted C# spin', async ({ page 
   expect(errors).toEqual([]);
 });
 test('cube_test keyboard moves existing orbit camera and blur releases it', async ({ page }) => {
-  const response = await page.goto('http://127.0.0.1:8197/game/');
+  const response = await openCube(page);
   expect(response.status()).toBe(200);
   await expect.poll(() => page.evaluate(() => window.helengineDiagnostics?.frames || 0), { timeout: 30000 }).toBeGreaterThan(5);
   await page.locator('canvas').click();

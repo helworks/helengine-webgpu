@@ -24,7 +24,7 @@
 - Screenshots/video/traces remain off. Validate GPU output with numeric readbacks and runtime state.
 - Outputs/logs belong below C:\dev\helworks\builds\helengine-webgpu\renderer-parity. Do not direct agent-owned output to TEMP.
 - Preserve unrelated engine and Windows worktree changes. Stage only owned files. C# follows C:\dev\helworks\helengine\AGENTS.md.
-- Do not implement until Helena reviews this written plan. This review gate comes from the writing-plans skill; the shadow architecture itself is already approved.
+- Execution approved by Helena; proceed through all nine tasks without renewed routine approval gates.
 
 ## Review Focus
 
@@ -191,4 +191,4 @@ Expected X: Build Waiter succeeded/exit 0, four fresh nonempty files and a manif
 - Review Focus ownership: slot reassignment → 3/5; target lifetime → 6; off-camera caster → 4; material inheritance → 7; repeated lifecycle/uploads → 8/9.
 - All generated-code defects are fixed in producers; no task authorizes a physics backend swap or an alternative shadow representation.
 - New helper interfaces are backend-internal. Engine contracts, content identity and external build entrypoints remain the existing ones.
-- The shadow architecture is approved. Written implementation-plan review remains pending; execution method remains native from the preceding phase.
+- The shadow architecture is approved. Implementation plan execution is approved; native execution is active.
