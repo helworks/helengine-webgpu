@@ -152,11 +152,15 @@ void WebGpuRenderManager2D::RenderCamera(ICamera* camera) {
         } else if (type == RenderCommand2DType::TexturedQuad || type == RenderCommand2DType::GlyphQuad) {
             bool glyph = type == RenderCommand2DType::GlyphQuad;
             int p = glyph ? commands->GetGlyphQuadPayloadIndex(i) : commands->GetTexturedQuadPayloadIndex(i);
-            auto bounds = glyph ? commands->GetGlyphQuadBounds(p) : commands->GetTexturedQuadBounds(p);
             auto source = glyph ? commands->GetGlyphQuadSourceRect(p) : commands->GetTexturedQuadSourceRect(p);
             auto tint = glyph ? commands->GetGlyphQuadColor(p) : commands->GetTexturedQuadColor(p);
             auto* texture = glyph ? commands->GetGlyphQuadTexture(p) : commands->GetTexturedQuadTexture(p);
-            Batch2DGeometry::CreateQuad__out8_out9_out10_out11(bounds.X, bounds.Y, bounds.Z, bounds.W, 0, glyph ? 0 : commands->GetTexturedQuadRotation(p), source, Batch2DGeometry::NormalizeColor(tint), a, b, c, d);
+            if (glyph) {
+                auto bounds = commands->GetGlyphQuadBounds(p);
+                Batch2DGeometry::CreateQuad__out8_out9_out10_out11(bounds.X, bounds.Y, bounds.Z, bounds.W, 0, 0, source, Batch2DGeometry::NormalizeColor(tint), a, b, c, d);
+            } else {
+                Batch2DGeometry::CreateSpriteQuad__out3_out4_out5_out6(commands->GetTexturedQuadGeometry(p), source, Batch2DGeometry::NormalizeColor(tint), a, b, c, d);
+            }
             Writer.AppendQuad(Run(Batch2DVariant::Textured, texture), a, b, c, d);
         } else throw std::runtime_error("Unknown engine UI command");
     }
