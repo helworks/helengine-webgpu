@@ -65,7 +65,7 @@ public static class WebGpuShaderFixtureGenerator {
         WriteArray(data, layout, "weights", [0.25f, 1], 1);
         WriteArray(data, layout, "offsets", [0.1f, 0.2f, 1, 1], 2);
         fields["constant-buffers"] = JsonSerializer.Serialize(new[] { new { name = "FixtureBuffer", data = Convert.ToBase64String(data) } });
-        File.WriteAllBytes(Path.Combine(root, "shaders-content", "matrix_fixture.wgpm"), new WebGpuMaterialCooker().Cook(new PlatformMaterialCookRequest("matrix_fixture", "matrix_fixture.wgpm", "webgpu", "release", "webgpu", "standard-shader", fields)).CookedMaterialBytes);
+        File.WriteAllBytes(Path.Combine(root, "shaders-content", "matrix_fixture.wgpm"), new WebGpuMaterialCooker().Cook(new PlatformMaterialCookRequest("matrix_fixture", "matrix_fixture.wgpm", "webgpu", "release", "webgpu", "standard-shader", fields, numericPolicy: global::helengine.NumericPrecisionPolicy.Default)).CookedMaterialBytes);
         Console.WriteLine("Generated 7 original/custom shader selections and matrix/array WGPM fixture in " + root);
     }
     /// <summary>Writes logical array elements using original compiler offsets and strides instead of assuming WGSL packing.</summary>

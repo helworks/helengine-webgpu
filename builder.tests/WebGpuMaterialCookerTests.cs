@@ -80,5 +80,5 @@ public sealed class WebGpuMaterialCookerTests {
         ["texture-id"] = "", ["texture-relative-path"] = "", ["roughness-texture-id"] = "", ["emissive-texture-id"] = "", ["constant-buffers"] = "", ["depth-test"] = "true", ["depth-write"] = "true"
     };
     /// <summary>Uses the existing unmodified editor-to-builder request signature.</summary>
-    internal static PlatformMaterialCookRequest Request(IReadOnlyDictionary<string, string> fields) => new("cube-solid", "materials/cube.hasset", "webgpu", "release", "webgpu", "standard-shader", fields);
+    internal static PlatformMaterialCookRequest Request(IReadOnlyDictionary<string, string> fields) => new("cube-solid", "materials/cube.hasset", "webgpu", "release", "webgpu", "standard-shader", fields, numericPolicy: global::helengine.NumericPrecisionPolicy.Default);
 }

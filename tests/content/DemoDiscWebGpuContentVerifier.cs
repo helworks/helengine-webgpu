@@ -138,7 +138,7 @@ public static class DemoDiscWebGpuContentVerifier {
             var projection=new MaterialAssetReferenceProjectionService();var original=projection.CreateResolvedFieldValues(desktop);var actual=projection.CreateResolvedFieldValues(browser);
             bool preserved=original.Where(value=>schema.Fields.Any(field=>field.FieldId==value.Key)).All(value=>actual.TryGetValue(value.Key,out string text) && text==value.Value);
             var fields=schema.Fields.ToDictionary(field=>field.FieldId,field=>field.DefaultValue,StringComparer.OrdinalIgnoreCase);foreach(var field in actual)fields[field.Key]=field.Value;fields["variant"]="default";
-            var cooked=new WebGpuMaterialCooker().Cook(new PlatformMaterialCookRequest(name,"materials/"+name+".hasset","webgpu","release","webgpu","standard-shader",fields));
+            var cooked=new WebGpuMaterialCooker().Cook(new PlatformMaterialCookRequest(name,"materials/"+name+".hasset","webgpu","release","webgpu","standard-shader",fields, numericPolicy: global::helengine.NumericPrecisionPolicy.Default));
             var material=WebGpuMaterialArtifactSerializer.Deserialize(cooked.CookedMaterialBytes).Metadata;
             var buffers=material.GetProperty("constantBuffers").EnumerateArray().ToDictionary(value=>value.GetProperty("name").GetString(),value=>Convert.FromBase64String(value.GetProperty("data").GetString()));
             float metal=BinaryPrimitives.ReadSingleLittleEndian(buffers["MetallicBuffer"]),rough=BinaryPrimitives.ReadSingleLittleEndian(buffers["RoughnessBuffer"]);
