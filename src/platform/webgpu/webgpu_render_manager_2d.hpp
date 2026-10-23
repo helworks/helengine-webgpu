@@ -22,7 +22,7 @@ public:
     /// Uploads prepared RGBA texture bytes for sprites or font atlases.
     RuntimeTexture* BuildTextureFromRaw(TextureAsset* data) override;
     /// Deserializes one prepared texture using the generated engine serializer.
-    RuntimeTexture* BuildTextureFromCooked(std::string path, IContentStreamSource* source) override;
+    RuntimeTexture* BuildTextureFromCooked(HeCppString path, IContentStreamSource* source) override;
     /// Emits a sprite through shared geometry rules.
     void DrawSprite(ISpriteDrawable2D* sprite) override;
     /// Emits text with shared font layout and glyph expansion.

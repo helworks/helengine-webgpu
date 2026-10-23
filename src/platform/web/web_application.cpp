@@ -22,8 +22,11 @@
 #include "runtime/runtime_startup_manifest.hpp"
 #include "runtime/runtime_code_module_manifest.hpp"
 #include "IPhysicsRuntime.hpp"
+#if __has_include("IPhysicsTriggerEventRuntime3D.hpp")
 #include "IPhysicsTriggerEventRuntime3D.hpp"
 #include "TriggerEvent3D.hpp"
+#define HELENGINE_WEBGPU_HAS_PHYSICS_TRIGGER_EVENTS 1
+#endif
 #include "runtime/native_exceptions.hpp"
 #include <emscripten.h>
 #include <cstring>
@@ -109,6 +112,7 @@ void WebApplication::Frame(double timestamp) {
         EM_ASM({window['helengineRuntimeConfiguration']['physicsType']=UTF8ToString($0);window['helengineRuntimeConfiguration']['physicsIdentity']=$1;},physicsType.c_str(),reinterpret_cast<uintptr_t>(physics));
         EM_ASM({ window['helengineHostStage'] = 'frame-complete'; });
         EM_ASM({ window['helengineDiagnostics'] = ({'frames': $0, 'sceneIds': [], 'entities': {}, 'components': [], 'texts': [], 'triggerEvents': []}); }, Frames);
+#if defined(HELENGINE_WEBGPU_HAS_PHYSICS_TRIGGER_EVENTS)
         if(auto* triggerRuntime=dynamic_cast<IPhysicsTriggerEventRuntime3D*>(physics)) {
             auto* events=triggerRuntime->get_TriggerEvents();
             for(int32_t index=0;index<events->get_Count();++index) {
@@ -116,6 +120,7 @@ void WebApplication::Frame(double timestamp) {
                 EM_ASM({window['helengineDiagnostics']['triggerEvents'].push($0);},static_cast<int>(event->get_Kind()));
             }
         }
+#endif
         auto* scenes = Engine->get_SceneManager()->GetLoadedSceneIds();
         for (int32_t i = 0; i < scenes->Count(); ++i) {
             auto id = (*scenes)[i]; EM_ASM({ window['helengineDiagnostics']['sceneIds'].push(UTF8ToString($0)); }, id.c_str());
@@ -125,7 +130,8 @@ void WebApplication::Frame(double timestamp) {
         for (int32_t i = 0; i < entities->Count(); ++i) {
             auto* entity = (*entities)[i];
             auto orientation = entity->get_Orientation(); auto position = entity->get_Position();
-            EM_ASM({ window['helengineDiagnostics']['entities'][$0] = ({'position': [$1,$2,$3], 'orientation': [$4,$5,$6,$7], 'components': []}); }, entity->get_SceneEntityRuntimeId(), position.X, position.Y, position.Z, orientation.X, orientation.Y, orientation.Z, orientation.W);
+            // JavaScript diagnostics use Number; convert only at this wire boundary.
+            EM_ASM({ window['helengineDiagnostics']['entities'][$0] = ({'position': [$1,$2,$3], 'orientation': [$4,$5,$6,$7], 'components': []}); }, entity->get_SceneEntityRuntimeId(), static_cast<double>(position.X), static_cast<double>(position.Y), static_cast<double>(position.Z), static_cast<double>(orientation.X), static_cast<double>(orientation.Y), static_cast<double>(orientation.Z), static_cast<double>(orientation.W));
             if (!entity->get_IsHierarchyEnabled()) continue;
             auto* components=entity->get_Components();
             for(int32_t index=0;index<components->Count();++index) {

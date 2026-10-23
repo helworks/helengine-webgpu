@@ -22,13 +22,13 @@ public:
     /// Converts raw mesh streams into retained GPU buffers.
     RuntimeModel* BuildModelFromRaw(ModelAsset* data) override;
     /// Deserializes a prepared engine model and uploads it.
-    RuntimeModel* BuildModelFromCooked(std::string path, IContentStreamSource* source) override;
+    RuntimeModel* BuildModelFromCooked(HeCppString path, IContentStreamSource* source) override;
     /// Creates a normal engine render target whose output later cameras and sprites can sample.
     RenderTarget* CreateRenderTarget(int32_t width,int32_t height) override;
     /// Validates and loads the platform-owned basic material payload.
     RuntimeMaterial* BuildMaterialFromCooked(PlatformMaterialAsset* data) override;
     /// Reads and validates one prepared material from the content source.
-    RuntimeMaterial* BuildMaterialFromCooked(std::string path, IContentStreamSource* source) override;
+    RuntimeMaterial* BuildMaterialFromCooked(HeCppString path, IContentStreamSource* source) override;
     /// Reports exactly the forward-light features implemented by this backend.
     RendererBackendCapabilityProfile* GetCapabilityProfile() override;
     /// Renders active cameras in engine order, interleaving their UI queues.

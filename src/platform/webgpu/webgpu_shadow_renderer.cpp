@@ -74,7 +74,8 @@ void WebGpuShadowRenderer::DrawCasters(WGPURenderPassEncoder pass,const std::vec
                 if(name=="worldViewProj") WriteEngineMatrix(member,reinterpret_cast<const float*>(&mvp),bytes);
                 else if(name=="world" && point) WriteEngineMatrix(member,reinterpret_cast<const float*>(&world),bytes);
                 else if(name=="lightPositionAndRange" && point) {
-                    float value[4]={point->Light.Position.X,point->Light.Position.Y,point->Light.Position.Z,point->Light.Range}; std::memcpy(bytes.data()+member.at("offset").get<size_t>(),value,16);
+                    // This shader constant has an explicit float32 wire layout.
+                    float value[4]={static_cast<float>(point->Light.Position.X),static_cast<float>(point->Light.Position.Y),static_cast<float>(point->Light.Position.Z),point->Light.Range}; std::memcpy(bytes.data()+member.at("offset").get<size_t>(),value,16);
                 }
                 else if(name!="color") throw std::runtime_error("Unknown atlas shadow shader constant: "+name);
             }

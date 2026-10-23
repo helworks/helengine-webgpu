@@ -75,7 +75,8 @@ RuntimeModel* WebGpuRenderManager3D::BuildModelFromRaw(ModelAsset* data) {
     for (int32_t i = 0; i < data->Positions->Length; ++i) {
         auto p = (*data->Positions)[i]; auto n = (*data->Normals)[i];
         float2 uv = data->TexCoords && i<data->TexCoords->Length ? (*data->TexCoords)[i] : float2(0,0);
-        vertices[i] = {{p.X, p.Y, p.Z}, {n.X, n.Y, n.Z}, {uv.X,uv.Y}};
+        // Vertex attributes have an explicit float32 GPU layout independent of engine arithmetic.
+        vertices[i] = {{static_cast<float>(p.X), static_cast<float>(p.Y), static_cast<float>(p.Z)}, {static_cast<float>(n.X), static_cast<float>(n.Y), static_cast<float>(n.Z)}, {static_cast<float>(uv.X), static_cast<float>(uv.Y)}};
     }
     model->VertexCount = static_cast<uint32_t>(vertices.size());
     model->Vertices = Frame.Buffer(vertices.data(), vertices.size() * sizeof(Vertex), WGPUBufferUsage_Vertex);
@@ -87,18 +88,18 @@ RuntimeModel* WebGpuRenderManager3D::BuildModelFromRaw(ModelAsset* data) {
     auto* ranges = ModelSubmeshResolver::BuildRuntimeSubmeshes(data); model->SetSubmeshes(ranges); delete ranges;
     return model.release();
 }
-RuntimeModel* WebGpuRenderManager3D::BuildModelFromCooked(std::string path, IContentStreamSource* source) {
+RuntimeModel* WebGpuRenderManager3D::BuildModelFromCooked(HeCppString path, IContentStreamSource* source) {
     std::unique_ptr<Stream> stream(source->OpenRead(path));
     std::unique_ptr<Asset> asset(AssetSerializer::Deserialize(stream.get()));
     auto* model = dynamic_cast<ModelAsset*>(asset.get());
-    if (!model) throw std::runtime_error("Prepared model has the wrong asset type: " + path);
+    if (!model) throw std::runtime_error("Prepared model has the wrong asset type: " + path.raw());
     return BuildModelFromRaw(model);
 }
 RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(PlatformMaterialAsset*) {
     throw std::runtime_error("WebGPU materials require versioned WGPM data through the path/stream overload");
 }
-RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(std::string path, IContentStreamSource* source) {
-    auto material=std::make_unique<WebGpuRuntimeMaterial>(); material->Artifact=ReadMaterialArtifact(ContentBytes(path,source));
+RuntimeMaterial* WebGpuRenderManager3D::BuildMaterialFromCooked(HeCppString path, IContentStreamSource* source) {
+    auto material=std::make_unique<WebGpuRuntimeMaterial>(); material->Artifact=ReadMaterialArtifact(ContentBytes(path.raw(),source));
     auto& metadata=material->Artifact.Metadata; std::string shaderPath=metadata.at("shaderPath");
     material->Program=Frame.Shaders->Load(shaderPath,ContentBytes(shaderPath,source));
     material->set_Id(metadata.at("materialAssetId").get<std::string>());
@@ -134,7 +135,7 @@ void WebGpuRenderManager3D::Draw() {
         if (!camera->get_Parent()->get_IsHierarchyEnabled() || !IsCameraVisibleInWindow(camera, get_RenderWindowHandle())) continue;
         auto output=ResolveCameraTarget(Frame,camera);ActiveTarget=output.Pipeline;
         auto viewport = camera->get_Viewport();
-        float width = viewport.Z * output.Width, height = viewport.W * output.Height;
+        auto width = viewport.Z * output.Width, height = viewport.W * output.Height;
         if (width <= 0 || height <= 0) continue;
         float3 position = camera->get_Parent()->get_Position();
         CameraPosition = float4(position.X,position.Y,position.Z,1);
@@ -154,12 +155,12 @@ void WebGpuRenderManager3D::Draw() {
         auto clear = settings.get_ClearColor();
         WGPURenderPassColorAttachment color = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
         color.view = output.Color; color.loadOp = settings.get_ClearColorEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; color.storeOp = WGPUStoreOp_Store;
-        color.clearValue = {clear.X, clear.Y, clear.Z, clear.W};
+        color.clearValue = {static_cast<double>(clear.X), static_cast<double>(clear.Y), static_cast<double>(clear.Z), static_cast<double>(clear.W)};
         WGPURenderPassDepthStencilAttachment depth = WGPU_RENDER_PASS_DEPTH_STENCIL_ATTACHMENT_INIT;
         depth.view = output.Depth; depth.depthLoadOp = settings.get_ClearDepthEnabled() ? WGPULoadOp_Clear : WGPULoadOp_Load; depth.depthStoreOp = WGPUStoreOp_Store; depth.depthClearValue = settings.get_ClearDepth();
         WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color; descriptor.depthStencilAttachment = output.Depth?&depth:nullptr;
         Pass = wgpuCommandEncoderBeginRenderPass(Frame.Encoder, &descriptor);
-        wgpuRenderPassEncoderSetViewport(Pass, viewport.X * output.Width, viewport.Y * output.Height, width, height, 0, 1);
+        wgpuRenderPassEncoderSetViewport(Pass, static_cast<float>(viewport.X * output.Width), static_cast<float>(viewport.Y * output.Height), static_cast<float>(width), static_cast<float>(height), 0, 1);
         auto* queue=camera->get_RenderQueue3D();
         if(auto* list=dynamic_cast<RenderList3D*>(queue)) list->VisitCameraOrdered(this, camera);
         else queue->VisitOrdered(this);

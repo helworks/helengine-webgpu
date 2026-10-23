@@ -9,9 +9,9 @@ public:
     /// Stops a voice idempotently.
     void Stop(int32_t voiceId) override;
     /// Sets one mix bus's linear gain.
-    void SetBusGain(std::string busId, float gain) override;
+    void SetBusGain(HeCppString busId, float gain) override;
     /// Pauses/resumes voices while preserving their playback positions.
-    void SetBusPaused(std::string busId, bool paused) override;
+    void SetBusPaused(HeCppString busId, bool paused) override;
     /// Reports active or paused voice residency.
     bool IsPlaying(int32_t voiceId) override;
     /// Keeps the callback-driven Web Audio backend compatible with the core frame contract.

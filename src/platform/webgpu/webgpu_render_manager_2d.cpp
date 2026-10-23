@@ -50,9 +50,9 @@ RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromRaw(TextureAsset* data) {
     texture->Binding = Frame.Shaders->CreateBinding(*TexturedProgram,{{"BatchTexture",texture->View}}); texture->UniformGeneration=Frame.UniformGeneration;
     return texture.release();
 }
-RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromCooked(std::string path, IContentStreamSource* source) {
+RuntimeTexture* WebGpuRenderManager2D::BuildTextureFromCooked(HeCppString path, IContentStreamSource* source) {
     std::unique_ptr<Stream> stream(source->OpenRead(path)); std::unique_ptr<Asset> asset(AssetSerializer::Deserialize(stream.get()));
-    auto* texture = dynamic_cast<TextureAsset*>(asset.get()); if (!texture) throw std::runtime_error("Prepared texture has the wrong asset type: " + path);
+    auto* texture = dynamic_cast<TextureAsset*>(asset.get()); if (!texture) throw std::runtime_error("Prepared texture has the wrong asset type: " + path.raw());
     return BuildTextureFromRaw(texture);
 }
 void WebGpuRenderManager2D::UpdateTextureRegionCore(RuntimeTexture* runtime, int32_t x, int32_t y, int32_t width, int32_t height, Array<uint8_t>* rgba8, int32_t sourceRowPitch) {
@@ -133,15 +133,17 @@ void WebGpuRenderManager2D::RenderCamera(ICamera* camera) {
     color.view = output.Color; color.loadOp = WGPULoadOp_Load; color.storeOp = WGPUStoreOp_Store;
     WGPURenderPassDescriptor descriptor = WGPU_RENDER_PASS_DESCRIPTOR_INIT; descriptor.colorAttachmentCount = 1; descriptor.colorAttachments = &color;
     Pass = wgpuCommandEncoderBeginRenderPass(Frame.Encoder, &descriptor);
-    wgpuRenderPassEncoderSetViewport(Pass, Viewport.X, Viewport.Y, Viewport.Z, Viewport.W, 0, 1);
+    // WebGPU viewport arguments are fixed float32 values at the native API boundary.
+    wgpuRenderPassEncoderSetViewport(Pass, static_cast<float>(Viewport.X), static_cast<float>(Viewport.Y), static_cast<float>(Viewport.Z), static_cast<float>(Viewport.W), 0, 1);
     Clips.clear(); Writer.ConfigureCamera(Batch2DCameraProjection::Create(Viewport), Viewport);
     for (int32_t i = 0; i < commands->get_Count(); ++i) {
         auto type = commands->GetCommandType(i);
         if (type == RenderCommand2DType::ClipPush) {
             auto rect = commands->GetClipPushRect(commands->GetClipPushPayloadIndex(i)); auto parent = Clips.empty() ? Viewport : Clips.back();
-            float left = std::max(parent.X, rect.X), top = std::max(parent.Y, rect.Y);
-            float right = std::min(parent.X + parent.Z, rect.X + rect.Z), bottom = std::min(parent.Y + parent.W, rect.Y + rect.W);
-            Clips.push_back(float4(left, top, std::max(0.f, right - left), std::max(0.f, bottom - top))); continue;
+            auto left = std::max(parent.X, rect.X), top = std::max(parent.Y, rect.Y);
+            Real right = std::min(parent.X + parent.Z, rect.X + rect.Z), bottom = std::min(parent.Y + parent.W, rect.Y + rect.W);
+            Real clipWidth = right > left ? Real(right - left) : Real(0), clipHeight = bottom > top ? Real(bottom - top) : Real(0);
+            Clips.push_back(float4(left, top, clipWidth, clipHeight)); continue;
         }
         if (type == RenderCommand2DType::ClipPop) { if (Clips.empty()) throw std::runtime_error("UI clip stack underflow"); Clips.pop_back(); continue; }
         Batch2DVertex a, b, c, d;

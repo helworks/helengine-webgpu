@@ -1,11 +1,12 @@
 #include "webgpu_shadow_plan.hpp"
+#include "RealMath.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 namespace helengine::webgpu {
 namespace {
 float3 Normalize(float3 value) {
-    double length=std::sqrt(double(value.X)*value.X+double(value.Y)*value.Y+double(value.Z)*value.Z);
+    auto length=RealMath::Sqrt(value.X*value.X+value.Y*value.Y+value.Z*value.Z);
     return length>0.0000001?float3(value.X/length,value.Y/length,value.Z/length):float3(0,0,-1);
 }
 float4x4 Projection(float3 position,float3 direction,float3 up,float4x4 projection) {
@@ -46,7 +47,7 @@ void WebGpuShadowPlan::PrepareForCamera(float3 cameraPosition,float3 cameraForwa
                 double field=std::min(light.OuterConeDegrees*3.141592653589793/90,3.141592653589793-0.0001); float range=std::max(0.1f,light.Range);
                 float4x4::CreatePerspectiveFieldOfView__out4(field,1,0.1f,range+std::max(2.0f,range*0.15f),projection);
             } else throw std::runtime_error("Unsupported shadow light family");
-            float3 up=std::abs(direction.Y)>0.99f?float3(0,0,1):float3(0,1,0); entry.Matrix=Projection(position,direction,up,projection);
+            float3 up=RealMath::Abs(direction.Y)>0.99f?float3(0,0,1):float3(0,1,0); entry.Matrix=Projection(position,direction,up,projection);
         }
     }
 }

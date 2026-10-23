@@ -17,14 +17,15 @@ void WebGpuLightState::PrepareRecords(const std::vector<WebGpuLightRecord>& reco
     }
 }
 ArtifactJson WebGpuLightState::ForwardValues() const {
-    ArtifactJson values={{"ambientLightColor",{Ambient.X,Ambient.Y,Ambient.Z,0}},{"lightMetadata",{Slots.size(),0,0,0}}};
+    // Uniform JSON feeds fixed float32 shader layouts; scene calculations retain the generated Real policy.
+    ArtifactJson values={{"ambientLightColor",{static_cast<float>(Ambient.X),static_cast<float>(Ambient.Y),static_cast<float>(Ambient.Z),0}},{"lightMetadata",{Slots.size(),0,0,0}}};
     for(size_t index=0;index<4;++index) {
         std::string prefix="light"+std::to_string(index);
         values[prefix+"ColorAndType"]={0,0,0,0}; values[prefix+"DirectionAndShadow"]={0,0,0,0}; values[prefix+"PositionAndRange"]={0,0,0,0}; values[prefix+"SpotAngles"]={0,0,0,0};
         if(index>=Slots.size()) continue;
-        auto& light=Slots[index]; values[prefix+"ColorAndType"]={light.Color.X*light.Intensity,light.Color.Y*light.Intensity,light.Color.Z*light.Intensity,light.Type};
-        values[prefix+"DirectionAndShadow"]={light.Direction.X,light.Direction.Y,light.Direction.Z,light.ShadowStrength};
-        if(light.Type==1 || light.Type==2) values[prefix+"PositionAndRange"]={light.Position.X,light.Position.Y,light.Position.Z,light.Range};
+        auto& light=Slots[index]; values[prefix+"ColorAndType"]={static_cast<float>(light.Color.X*light.Intensity),static_cast<float>(light.Color.Y*light.Intensity),static_cast<float>(light.Color.Z*light.Intensity),light.Type};
+        values[prefix+"DirectionAndShadow"]={static_cast<float>(light.Direction.X),static_cast<float>(light.Direction.Y),static_cast<float>(light.Direction.Z),light.ShadowStrength};
+        if(light.Type==1 || light.Type==2) values[prefix+"PositionAndRange"]={static_cast<float>(light.Position.X),static_cast<float>(light.Position.Y),static_cast<float>(light.Position.Z),light.Range};
         if(light.Type==2) values[prefix+"SpotAngles"]={std::cos(light.InnerConeDegrees*3.141592653589793/180),std::cos(light.OuterConeDegrees*3.141592653589793/180),0,0};
     }
     return values;
