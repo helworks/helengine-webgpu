@@ -15,7 +15,7 @@ public sealed class WebGpuShadowDependencyTests {
         string source=File.ReadAllText(path);
         string root="C:/dev/helworks/builds/helengine-webgpu/renderer-parity/missing-material/"+Guid.NewGuid().ToString("N");
         var result=new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(root,"webgpu","release","webgpu",[dependency],
-            [new PlatformShaderArtifactCookSource(dependency.ShaderAssetId,Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))),source,path)]));
+            [new PlatformShaderArtifactCookSource(dependency.ShaderAssetId,Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))),source,path)], helengine.NumericPrecisionPolicy.Default));
         var artifact=WebGpuShaderArtifactSerializer.Deserialize(File.ReadAllBytes(Path.Combine(root,Assert.Single(result.CookedArtifactDeclarations).RelativePath)));
         Assert.Contains("worldViewProj",artifact.Metadata.GetProperty("bindings").GetRawText());
     }
@@ -33,7 +33,7 @@ public sealed class WebGpuShadowDependencyTests {
         string path="C:/dev/helworks/helengine/engine/helengine.editor/shaders/builtin/EditorShadowDepth.hlsl"; string source=File.ReadAllText(path);
         string root="C:/dev/helworks/builds/helengine-webgpu/renderer-parity/shadow-dependencies/"+Guid.NewGuid().ToString("N");
         var result=new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(root,"webgpu","release","webgpu",[dependency],
-            [new PlatformShaderArtifactCookSource(dependency.ShaderAssetId,Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))),source,path)]));
+            [new PlatformShaderArtifactCookSource(dependency.ShaderAssetId,Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))),source,path)], helengine.NumericPrecisionPolicy.Default));
         var declaration=Assert.Single(result.CookedArtifactDeclarations);
         var artifact=WebGpuShaderArtifactSerializer.Deserialize(File.ReadAllBytes(Path.Combine(root,declaration.RelativePath)));
         Assert.DoesNotContain("@location(0u)",artifact.FragmentWgsl); Assert.Contains("worldViewProj",artifact.Metadata.GetProperty("bindings")[0].GetProperty("sourceLayout").GetRawText());

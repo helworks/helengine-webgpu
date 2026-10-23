@@ -53,7 +53,7 @@ public static class WebGpuShaderFixtureGenerator {
             File.WriteAllText(path, source); sources.Add(Source(fixture, path, source));
             dependencies.Add(new PlatformShaderDependency(fixture, fixture + ".vs", fixture + ".ps", "default"));
         }
-        new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Path.Combine(root, "shaders-content"), "webgpu", "release", "webgpu", dependencies, sources));
+        new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Path.Combine(root, "shaders-content"), "webgpu", "release", "webgpu", dependencies, sources, helengine.NumericPrecisionPolicy.Default));
         var fields = WebGpuPlatformDefinitionFactory.Create().MaterialSchemas.Single().Fields.ToDictionary(field => field.FieldId, field => field.DefaultValue);
         fields["shader-asset-id"] = "matrix_fixture"; fields["vertex-program"] = "matrix_fixture.vs"; fields["pixel-program"] = "matrix_fixture.ps"; fields["use-custom-shader"] = "true";
         fields["variant"] = "Mesh";

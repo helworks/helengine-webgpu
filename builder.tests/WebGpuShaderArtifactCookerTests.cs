@@ -51,7 +51,7 @@ public sealed class WebGpuShaderArtifactCookerTests : IDisposable {
         PlatformShaderDependency dependency = new("SpriteBatchShader", "SpriteBatchShader.vs", "SpriteBatchShader.ps", "unknown");
         WebGpuCountingShaderBackend backend = new();
         WebGpuShaderArtifactCooker cooker = new(_ => backend);
-        Assert.Throws<InvalidOperationException>(() => cooker.Cook(new PlatformShaderArtifactCookRequest(Root, "webgpu", "release", "webgpu", [dependency])));
+        Assert.Throws<InvalidOperationException>(() => cooker.Cook(new PlatformShaderArtifactCookRequest(Root, "webgpu", "release", "webgpu", [dependency], helengine.NumericPrecisionPolicy.Default)));
         Assert.Throws<InvalidOperationException>(() => cooker.Cook(Request([dependency], "SpriteBatchShader", Path.Combine(Root, "batch.hlsl"), "invalid")));
         Assert.Equal(0, backend.CompileCount);
     }
@@ -69,7 +69,7 @@ public sealed class WebGpuShaderArtifactCookerTests : IDisposable {
                 dependencies.Add(new PlatformShaderDependency(asset, asset + ".vs", asset + ".ps", variant.Name));
             }
         }
-        var result = new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Root, "webgpu", "release", "webgpu", dependencies, sources));
+        var result = new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Root, "webgpu", "release", "webgpu", dependencies, sources, helengine.NumericPrecisionPolicy.Default));
         Assert.Equal(5, result.CookedArtifactDeclarations.Count);
         foreach (var output in result.CookedArtifactDeclarations) {
             WebGpuShaderArtifact artifact = WebGpuShaderArtifactSerializer.Deserialize(File.ReadAllBytes(Path.Combine(Root, output.RelativePath)));
@@ -126,7 +126,7 @@ public sealed class WebGpuShaderArtifactCookerTests : IDisposable {
     /// <summary>Builds the same complete source snapshot contract the editor supplies.</summary>
     PlatformShaderArtifactCookRequest Request(IReadOnlyList<PlatformShaderDependency> dependencies, string asset, string path, string source) {
         return new PlatformShaderArtifactCookRequest(Root, "webgpu", "release", "webgpu", dependencies,
-            [new PlatformShaderArtifactCookSource(asset, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))), source, path)]);
+            [new PlatformShaderArtifactCookSource(asset, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))), source, path)], helengine.NumericPrecisionPolicy.Default);
     }
 
     /// <summary>Removes only the test's own output directory.</summary>

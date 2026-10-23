@@ -25,7 +25,7 @@ public sealed class WebGpuBuildFixture {
             sources.Add(new PlatformShaderArtifactCookSource(asset, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))), text, path));
         }
         new WebGpuShaderArtifactCooker().Cook(new PlatformShaderArtifactCookRequest(Path.Combine(Root, "staged", "cooked"), "webgpu", "release", "webgpu",
-            dependencies, sources));
+            dependencies, sources, helengine.NumericPrecisionPolicy.Default));
         Directory.CreateDirectory(Path.Combine(Root, "web"));
         File.WriteAllText(Path.Combine(Root, "web", "index.html"), "<!doctype html><title>fixture</title>");
         File.WriteAllText(Path.Combine(Root, "web", "bootstrap.js"), "fixture bootstrap");
